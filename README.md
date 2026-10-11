@@ -51,10 +51,22 @@ Savings are largest on ProRes and high-bitrate action-camera footage.
 
 ## Install
 
-There is no download yet; you build it, which takes a few seconds.
+1. Download `PhotoReview-x.y.z.zip` from the [latest release](https://github.com/danielyaa5/photo-review/releases/latest).
+2. Unzip it and move **Photo Review** to your Applications folder.
+3. Open it.
 
-Requirements: a Mac running macOS 13 or later (it has only been tested on macOS 27), and Apple's command line
-tools (`xcode-select --install`).
+The app is signed and notarized by Apple, so it opens like any other downloaded app. It runs on Apple silicon
+and Intel Macs with macOS 13 or later, though it has only been tested on macOS 27.
+
+On first launch macOS asks whether Photo Review may access your Photos library; choose **Allow Full Access**,
+since it needs to read sizes, add shrunk copies and delete what you select. Your browser then opens at
+`http://127.0.0.1:8377`. Measuring a large library takes about a minute, with the biggest videos shown first.
+
+Keep the small Photo Review window open while you work. Closing it quits the app.
+
+### Building it yourself
+
+You need Apple's command line tools (`xcode-select --install`).
 
 ```bash
 git clone https://github.com/danielyaa5/photo-review.git
@@ -63,11 +75,8 @@ cd photo-review
 open "Photo Review.app"
 ```
 
-On first launch macOS asks whether Photo Review may access your Photos library; choose **Allow Full Access**,
-since it needs to read sizes, add shrunk copies and delete what you select. Your browser then opens at
-`http://127.0.0.1:8377`. Measuring a large library takes about a minute, with the biggest videos shown first.
-
-Keep the small Photo Review window open while you work. Closing it quits the app.
+A local build is signed for your Mac only and uses a different app identity from the release, so macOS asks
+for Photos access separately for each.
 
 ## Things to know before you rely on it
 
@@ -93,6 +102,7 @@ One Swift file and two HTML pages, with no dependencies beyond macOS itself.
   and keeps a history file in `~/Library/Application Support/Photo Review/`.
 - `index.html` and `stats.html`: the library view and the savings page.
 - `build.sh`: compiles and signs the app locally.
+- `release/`: builds the signed, notarized download (needs a paid Apple Developer team signed in to Xcode).
 
 State-changing requests need a token that only the page served by the app has, and requests arriving under
 any other hostname are rejected, so other websites can't drive it.

@@ -1,0 +1,30 @@
+# Xcode project for signed, notarized release builds. Day-to-day builds use ../build.sh instead.
+name: PhotoReview
+options:
+  deploymentTarget:
+    macOS: "13.0"
+targets:
+  PhotoReview:
+    type: application
+    platform: macOS
+    sources:
+      - path: ../main.swift
+      - path: ../index.html
+        buildPhase: resources
+      - path: ../stats.html
+        buildPhase: resources
+      - path: ../assets/icon.svg
+        buildPhase: resources
+      - path: ../assets/AppIcon.icns
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_NAME: Photo Review
+        EXECUTABLE_NAME: PhotoReview
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.danielyaa5.photo-review
+        INFOPLIST_FILE: build/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: PhotoReview.entitlements
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_HARDENED_RUNTIME: YES
+        SWIFT_VERSION: "5"

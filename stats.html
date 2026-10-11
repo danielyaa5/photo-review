@@ -8,12 +8,12 @@
 <style>
   :root {
     --bg: #f5f5f2; --card: #ffffff; --fg: #1b1b1d; --muted: #6a6a70; --line: #e1e1dc;
-    --accent: #0a62d0; --track: #cfe0f7;
+    --accent: #0a62d0;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #151517; --card: #212124; --fg: #f1f1f2; --muted: #9b9ba2; --line: #34343a;
-      --accent: #63a6ff; --track: #263f5f;
+      --accent: #63a6ff;
     }
   }
   * { box-sizing: border-box; }
@@ -54,10 +54,7 @@
   tr.unfinished td { color: var(--muted); }
   tr.unfinished td.name, tr.unfinished .outcome { color: var(--fg); }
   .caption { margin: -4px 0 8px; }
-  .metercap { font-size: 12px; margin-top: 3px; white-space: nowrap; }
-  /* A size comparison, not progress: the whole bar is the original's size, the filled part the copy's. */
-  .meter { height: 8px; min-width: 120px; border-radius: 4px; background: var(--track); overflow: hidden; margin-top: 6px; }
-  .meter div { height: 100%; min-width: 2px; border-radius: 4px; background: var(--accent); }
+  td.sizes { white-space: nowrap; }
   .empty { background: var(--card); border: 1px dashed var(--line); border-radius: 12px; padding: 22px; color: var(--muted); margin-top: 16px; }
 </style>
 </head>
@@ -110,8 +107,6 @@ function span(seconds) {
   const minutes = Math.round(seconds / 60);
   return minutes < 60 ? minutes + " min" : `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
 }
-// A share as a percentage, without rounding a small one down to nothing.
-const percentOf = (share) => (share < 0.01 ? "under 1%" : Math.round(share * 100) + "%");
 const when = (time) => new Date(time).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 const plural = (count, word) => `${count.toLocaleString()} ${word}${count === 1 ? "" : "s"}`;
 function settings(s) {
@@ -192,9 +187,6 @@ function render(data) {
             cell("", "number"), cell(""), cell(taken), cell(settings(e.settings)),
           ]);
         }
-        const fill = el("div");
-        fill.style.width = Math.max(1, share * 100) + "%";
-        const meter = el("div", { className: "meter", title: `${size(e.newBytes)} of ${size(e.originalBytes)}` }, [fill]);
         const original = !e.copyExists ? "Smaller copy deleted" : e.originalExists ? "Still in the library" : "Deleted";
         // Only items still in the library can be shown in Photos.
         const links = el("div", { className: "links" }, [
@@ -203,8 +195,7 @@ function render(data) {
         ]);
         return el("tr", {}, [
           cell(when(e.time), "when"), el("td", { className: "name" }, [el("div", { textContent: e.name }), links]), result,
-          el("td", {}, [el("div", { textContent: `${size(e.originalBytes)} → ${size(e.newBytes)}` }), meter,
-            el("div", { className: "muted metercap", textContent: `Copy is ${percentOf(share)} of the original's size` })]),
+          cell(`${size(e.originalBytes)} → ${size(e.newBytes)}`, "sizes"),
           cell(`${size(e.originalBytes - e.newBytes)} (${Math.round(100 * (1 - share))}%)`, "number"),
           cell(original), cell(taken), cell(settings(e.settings)),
         ]);

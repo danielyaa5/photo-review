@@ -81,6 +81,7 @@
   #shrink p { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
   #shrink label { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0; }
   #shrink select { width: 230px; }
+  #shrink label.check { justify-content: flex-start; gap: 8px; margin: 12px 0 4px; color: var(--fg); }
   #spreview { max-height: 170px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; margin-top: 12px; font-size: 13px; }
   #spreview .line { display: flex; justify-content: space-between; gap: 12px; padding: 6px 10px; white-space: nowrap; }
   #spreview .line + .line { border-top: 1px solid var(--line); }
@@ -158,7 +159,7 @@
 <div id="shrink">
   <div class="dialog" role="dialog" aria-labelledby="stitle">
     <h2 id="stitle">Shrink videos</h2>
-    <p>Each video is downloaded from iCloud at full quality, re-encoded on this Mac, and added to Photos as a new item with the same date, location, favorite and albums. The original stays until you delete it.</p>
+    <p>Each video is downloaded from iCloud at full quality, re-encoded on this Mac, and added to Photos as a new item with the same date, location, favorite and albums. The original stays until you delete it, unless you tick the box below.</p>
     <label>Resolution <select id="sres">
       <option value="keep">Keep original</option><option value="2160">4K at most</option>
       <option value="1080">1080p at most</option><option value="720">720p at most</option></select></label>
@@ -170,6 +171,8 @@
       <option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
     <div id="spreview"></div>
     <p id="sestimate"></p>
+    <label class="check"><input type="checkbox" id="sdelete"> Delete each original once its smaller copy is in Photos</label>
+    <p>macOS asks you to confirm once, when the whole queue has finished. Deleted originals stay in Recently Deleted for 30 days.</p>
     <p>HDR videos stay HDR and are always saved as HEVC. Edits are baked in, and captions, keywords and people tags don't carry over.</p>
     <div class="row"><button id="scancel">Cancel</button><button id="sstart" class="primary">Start</button></div>
   </div>
@@ -193,7 +196,7 @@
 const TOKEN = "__TOKEN__";
 const PAGE = 60;
 // `marked` is the selection (id -> item); `viewing` is the item open in the viewer, `current` its index in the list or -1.
-const state = { items: [], marked: new Map(), kind: "all", year: "", match: 0, status: "starting", current: -1, viewing: null, busy: false, jobs: new Map(), downloading: false, offline: false };
+const state = { items: [], marked: new Map(), kind: "all", year: "", match: 0, status: "starting", current: -1, viewing: null, busy: false, jobs: new Map(), gone: new Set(), downloading: false, offline: false };
 const $ = (id) => document.getElementById(id);
 
 function size(bytes) {
@@ -486,7 +489,7 @@ $("scancel").onclick = () => $("shrink").classList.remove("on");
 for (const id of ["sres", "sfps", "scodec", "squality"]) $(id).onchange = renderEstimate;
 $("sstart").onclick = async () => {
   const videos = selectedVideos();
-  const result = await post("/api/shrink", { ids: videos.map((item) => item.id), ...shrinkOptions() });
+  const result = await post("/api/shrink", { ids: videos.map((item) => item.id), ...shrinkOptions(), deleteOriginal: $("sdelete").checked });
   $("shrink").classList.remove("on");
   if (!result.ok) return toast(result.error);
   // Originals are selected again one by one as their smaller copies arrive.
@@ -515,7 +518,10 @@ function jobStatus(job) {
     case "done": {
       const saved = `${size(job.originalBytes)} → ${size(job.newBytes)}, saves ${Math.round(100 * (1 - job.newBytes / job.originalBytes))}%.`;
       if (!job.newItem) return saved + " Test run: nothing was added to Photos.";
-      return saved + (job.originalDeleted ? " Original deleted." : " Check the new copy, then delete the original.");
+      if (job.originalDeleted) return saved + " Original deleted.";
+      if (job.deletion === "pending") return saved + " The original will be deleted when the queue finishes; macOS will ask you to confirm.";
+      if (job.deletion === "kept") return saved + " Original kept: " + (job.message || "the deletion wasn't confirmed.");
+      return saved + " Check the new copy, then delete the original.";
     }
     default: return job.message;
   }
@@ -550,7 +556,7 @@ function renderJobs(jobs) {
     row.action.hidden = !active && !retry && !job.newItem;
     row.action.onclick = active ? async () => { await post("/api/jobs/cancel", { id: job.id }); pollJobs(); }
       : retry ? async () => {
-        const result = await post("/api/shrink", { ids: [job.assetId], ...job.settings });
+        const result = await post("/api/shrink", { ids: [job.assetId], ...job.settings, deleteOriginal: job.deleteOriginal });
         if (!result.ok) toast(result.error);
         pollJobs();
       }
@@ -572,13 +578,19 @@ async function pollJobs() {
     pollJobs.timer = setTimeout(pollJobs, 6000);
     return;
   }
-  let finished = 0;
+  let finished = 0, removed = 0;
   for (const job of jobs) {
     const before = state.jobs.get(job.id);
-    if (job.state === "done" && job.newItem && before && before !== "done") {
+    if (job.state === "done" && job.newItem && !job.deleteOriginal && before && before !== "done") {
       // Select the original so it's ready to delete once the new copy has been checked.
       state.marked.set(job.assetId, job.item);
       finished++;
+    }
+    // An original deleted by the app itself drops out of the list, so the grid needs a refresh.
+    if (job.originalDeleted && !state.gone.has(job.id)) {
+      state.gone.add(job.id);
+      state.marked.delete(job.assetId);
+      removed++;
     }
     state.jobs.set(job.id, job.state);
   }
@@ -586,8 +598,8 @@ async function pollJobs() {
   renderJobs(jobs);
   // The app is answering again after a spell of not responding, so refresh the list too.
   if (state.offline && !state.viewing && !state.busy) await load({ limit: Math.max(PAGE, state.items.length) });
-  if (finished) {
-    toast(`${finished} smaller cop${finished === 1 ? "y is" : "ies are"} in Photos. The original${finished === 1 ? " is" : "s are"} selected, ready to delete.`);
+  if (finished) toast(`${finished} smaller cop${finished === 1 ? "y is" : "ies are"} in Photos. The original${finished === 1 ? " is" : "s are"} selected, ready to delete.`);
+  if (finished || removed) {
     if (!state.viewing && !state.busy) await load({ limit: Math.max(PAGE, state.items.length) });
     else renderBar();
   }

@@ -8,12 +8,12 @@
 <style>
   :root {
     --bg: #f5f5f2; --card: #ffffff; --fg: #1b1b1d; --muted: #6a6a70; --line: #e1e1dc;
-    --accent: #0a62d0;
+    --accent: #0a62d0; --danger: #c22f28;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #151517; --card: #212124; --fg: #f1f1f2; --muted: #9b9ba2; --line: #34343a;
-      --accent: #63a6ff;
+      --accent: #63a6ff; --danger: #ff6a60;
     }
   }
   * { box-sizing: border-box; }
@@ -25,6 +25,8 @@
   h1 img { width: 28px; height: 28px; }
   button { font: inherit; font-size: 13px; color: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--card); border-radius: 7px; padding: 3px 9px; white-space: nowrap; }
   .links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  button.danger { color: var(--danger); border-color: var(--danger); }
+  button:disabled { opacity: .6; cursor: default; }
   #toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 9px 16px; border-radius: 8px; display: none; max-width: 80vw; }
   h2 { margin: 30px 0 8px; font-size: 16px; }
   .muted { color: var(--muted); }
@@ -85,6 +87,27 @@ async function openInPhotos(id) {
     result = { ok: false, error: "Photo Review isn't responding." };
   }
   if (!result.ok) toast("Couldn't open it in Photos: " + result.error);
+}
+// Asks Photos to delete the original of a finished shrink. macOS shows its own confirmation first.
+async function deleteOriginal(event, button) {
+  button.disabled = true;
+  button.textContent = "Confirm in the Photo Review dialog…";
+  let result;
+  try {
+    const response = await fetch("/api/delete", { method: "POST", headers: { "X-Token": TOKEN, "Content-Type": "application/json" }, body: JSON.stringify({ ids: [event.assetId] }) });
+    if (response.status === 403) return location.reload();  // the app was restarted; this page is stale
+    result = await response.json();
+  } catch (error) {
+    result = { ok: false, error: "Photo Review isn't responding." };
+  }
+  if (result.ok) {
+    toast(`Moved the original of ${event.name} (${size(event.originalBytes)}) to Recently Deleted.`);
+  } else {
+    toast(result.error || "Nothing was deleted.");
+    button.disabled = false;
+    button.textContent = "Delete original";
+  }
+  refresh();
 }
 function photosButton(label, id) {
   const button = el("button", { textContent: label });
@@ -188,10 +211,14 @@ function render(data) {
           ]);
         }
         const original = !e.copyExists ? "Smaller copy deleted" : e.originalExists ? "Still in the library" : "Deleted";
-        // Only items still in the library can be shown in Photos.
+        // Only items still in the library can be shown in Photos, and an original is only offered for
+        // deletion while its smaller copy is still there to take its place.
+        const remove = el("button", { className: "danger", textContent: "Delete original" });
+        remove.onclick = () => deleteOriginal(e, remove);
         const links = el("div", { className: "links" }, [
           ...(e.copyExists ? [photosButton("Open copy in Photos", e.newId)] : []),
           ...(e.originalExists ? [photosButton("Open original in Photos", e.assetId)] : []),
+          ...(e.originalExists && e.copyExists ? [remove] : []),
         ]);
         return el("tr", {}, [
           cell(when(e.time), "when"), el("td", { className: "name" }, [el("div", { textContent: e.name }), links]), result,
@@ -216,6 +243,7 @@ function render(data) {
 
 let last = "";
 async function refresh() {
+  clearTimeout(refresh.timer);
   try {
     const text = await (await fetch("/api/stats")).text();
     // Only redraw when something changed, so text stays selectable between refreshes.
@@ -226,7 +254,7 @@ async function refresh() {
   } catch (error) {
     if (!last) $("content").replaceChildren(el("p", { className: "muted", textContent: "Photo Review isn't responding. Open the app, then reload this page." }));
   }
-  setTimeout(refresh, 5000);
+  refresh.timer = setTimeout(refresh, 5000);
 }
 refresh();
 </script>

@@ -591,6 +591,10 @@ final class Job {
     let settings: ShrinkSettings
     /// Encode only and leave the file in the temporary folder, without touching the library.
     let dryRun: Bool
+    /// Ask Photos to delete the original once the smaller copy is safely in the library.
+    let deleteOriginal: Bool
+    /// What became of that request: "" (not asked for), pending, deleted or kept.
+    var deletion = ""
     var state = "queued"  // queued, downloading, encoding, saving, done, skipped, failed, cancelled
     var progress = 0.0
     var message = ""
@@ -623,8 +627,9 @@ final class Job {
         ]
     }
 
-    init(id: Int, item: Item, settings: ShrinkSettings, dryRun: Bool) {
+    init(id: Int, item: Item, settings: ShrinkSettings, dryRun: Bool, deleteOriginal: Bool) {
         self.id = id
+        self.deleteOriginal = deleteOriginal && !dryRun
         assetId = item.id
         name = item.name
         originalBytes = item.bytes
@@ -641,6 +646,7 @@ final class Job {
             "originalBytes": originalBytes, "newBytes": newBytes, "newItem": newItem?.json ?? NSNull(),
             "item": original.json, "dryRun": dryRun, "settings": settings.json, "originalDeleted": originalDeleted,
             "seconds": Int(Date().timeIntervalSince(stateSince)), "remaining": remainingSeconds ?? NSNull(),
+            "deleteOriginal": deleteOriginal, "deletion": deletion,
         ]
     }
 }
@@ -653,19 +659,21 @@ final class Converter {
     private let queue = DispatchQueue(label: "shrink", qos: .userInitiated)
     private var jobs: [Job] = []
     private var nextId = 1
+    /// Finished jobs whose originals are to be deleted once nothing else is running.
+    private var awaitingDeletion: [Job] = []
 
     init(library: Library, history: History) {
         self.library = library
         self.history = history
     }
 
-    func enqueue(ids: [String], settings: ShrinkSettings, dryRun: Bool) -> Int {
+    func enqueue(ids: [String], settings: ShrinkSettings, dryRun: Bool, deleteOriginal: Bool) -> Int {
         var added = 0
         for id in ids {
             guard let item = library.item(id), item.isVideo else { continue }
             lock.lock()
             let busy = jobs.contains { $0.assetId == id && $0.isActive }
-            let job = Job(id: nextId, item: item, settings: settings, dryRun: dryRun)
+            let job = Job(id: nextId, item: item, settings: settings, dryRun: dryRun, deleteOriginal: deleteOriginal)
             if !busy {
                 // A fresh attempt replaces the rows left by earlier ones that didn't finish.
                 jobs.removeAll { $0.assetId == id && ["failed", "cancelled", "skipped"].contains($0.state) }
@@ -703,6 +711,40 @@ final class Converter {
         lock.lock()
         defer { lock.unlock() }
         return jobs.contains { $0.isActive }
+    }
+
+    /// Deletes library items through Photos (which asks the user to confirm) and records what was removed.
+    func delete(ids: [String], completion: @escaping (Bool, String?) -> Void) {
+        let doomed = ids.compactMap { library.item($0) }
+        library.delete(ids: ids) { ok, error in
+            if ok {
+                self.originalsDeleted(ids)
+                self.history.record([
+                    "type": "delete",
+                    "items": doomed.map { ["id": $0.id, "name": $0.name, "bytes": $0.bytes, "video": $0.isVideo] },
+                ])
+            }
+            completion(ok, error)
+        }
+    }
+
+    /// Once the queue has nothing left to do, asks Photos to delete the originals that were marked for it.
+    /// One request for the whole batch means one confirmation, not one per video in the middle of a long run.
+    private func deleteOriginalsIfIdle() {
+        lock.lock()
+        let idle = !jobs.contains { $0.isActive }
+        let batch = idle ? awaitingDeletion : []
+        if idle { awaitingDeletion = [] }
+        lock.unlock()
+        guard !batch.isEmpty else { return }
+        delete(ids: batch.map { $0.assetId }) { ok, error in
+            self.update { _ in
+                for job in batch {
+                    job.deletion = ok ? "deleted" : "kept"
+                    if !ok { job.message = error ?? "Photos didn't delete it." }
+                }
+            }
+        }
     }
 
     /// Notes which finished jobs have had their original deleted, so the page stops offering to select it.
@@ -784,13 +826,24 @@ final class Converter {
             update { _ in
                 job.newBytes = newBytes
                 job.newItem = newItem
+                guard job.deleteOriginal, let copy = newItem else { return }
+                // Only let go of an original whose copy runs the same length; anything else needs a human look.
+                if abs(copy.duration - asset.duration) < 1 {
+                    job.deletion = "pending"
+                    awaitingDeletion.append(job)
+                } else {
+                    job.deletion = "kept"
+                    job.message = "The copy's length differs from the original's, so check it before deleting."
+                }
             }
-            set(job, "done", message: job.dryRun ? output.path : "")
+            let note = job.dryRun ? output.path : job.message
+            set(job, "done", message: note)
         } catch let error as ShrinkError {
             set(job, error.state, message: error.message)
         } catch {
             set(job, "failed", message: error.localizedDescription)
         }
+        deleteOriginalsIfIdle()
     }
 
     /// The full-quality video with any edits applied, downloaded from iCloud if it isn't on this Mac.
@@ -1065,22 +1118,14 @@ final class Server {
             let payload = (try? JSONSerialization.jsonObject(with: request.body)) as? [String: Any]
             let ids = payload?["ids"] as? [String] ?? []
             guard !ids.isEmpty else { return sendJSON(connection, ["ok": false, "error": "Nothing selected."], status: 400) }
-            let doomed = ids.compactMap { self.library.item($0) }
-            library.delete(ids: ids) { ok, error in
-                if ok {
-                    self.converter.originalsDeleted(ids)
-                    self.history.record([
-                        "type": "delete",
-                        "items": doomed.map { ["id": $0.id, "name": $0.name, "bytes": $0.bytes, "video": $0.isVideo] },
-                    ])
-                }
+            converter.delete(ids: ids) { ok, error in
                 self.sendJSON(connection, ["ok": ok, "error": error ?? ""])
             }
         case ("POST", "/api/shrink"):
             let payload = (try? JSONSerialization.jsonObject(with: request.body)) as? [String: Any] ?? [:]
             let started = converter.enqueue(
                 ids: payload["ids"] as? [String] ?? [], settings: ShrinkSettings(payload),
-                dryRun: payload["dryRun"] as? Bool ?? false)
+                dryRun: payload["dryRun"] as? Bool ?? false, deleteOriginal: payload["deleteOriginal"] as? Bool ?? false)
             sendJSON(connection, ["ok": started > 0, "started": started, "error": started > 0 ? "" : "No videos to shrink."])
         case ("GET", "/api/jobs"):
             sendJSON(connection, ["jobs": converter.list()])

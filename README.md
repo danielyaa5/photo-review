@@ -41,8 +41,10 @@ Photos has no way to swap a video's file in place, so a shrink is three steps:
 2. It is re-encoded on your Mac with Apple's hardware encoder.
 3. The smaller copy is added to Photos as a new item, named like `IMG_1234 (shrunk).mov`.
 
-The original is left alone. When you have checked the new copy, you delete the original yourself. If a
-re-encode would not save a meaningful amount, the video is skipped instead.
+The original is left alone. When you have checked the new copy, you delete the original yourself. Or tick
+"Delete each original" when starting a batch: once the whole queue has finished, the app asks Photos to delete
+the originals of the videos that shrank successfully, and macOS asks you to confirm once. If a re-encode
+would not save a meaningful amount, the video is skipped instead.
 
 As an example, a 43-second 4K HDR iPhone clip went from 482 MB to 27 MB at 1080p, 30 fps, medium quality.
 Savings are largest on ProRes and high-bitrate action-camera footage.

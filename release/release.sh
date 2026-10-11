@@ -10,15 +10,16 @@ cd "$(dirname "$0")"
 
 VERSION="${1:?usage: TEAM_ID=XXXXXXXXXX release/release.sh VERSION}"
 TEAM_ID="${TEAM_ID:?set TEAM_ID to your Apple Developer team ID}"
-BUILD=build
+# Each version builds in its own folder, so making a release never deletes a copy that is still running.
+BUILD="build/$VERSION"
 ARCHIVE="$BUILD/PhotoReview.xcarchive"
 
 rm -rf "$BUILD" PhotoReview.xcodeproj
 mkdir -p "$BUILD"
 
 # The release has its own bundle id, so it never shares macOS permissions with a local build.sh build.
-sed 's/local\.photo-review/io.github.danielyaa5.photo-review/' ../Info.plist > "$BUILD/Info.plist"
-/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$BUILD/Info.plist"
+sed 's/local\.photo-review/io.github.danielyaa5.photo-review/' ../Info.plist > build/Info.plist
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" build/Info.plist
 
 xcodegen generate --quiet
 xcodebuild -project PhotoReview.xcodeproj -scheme PhotoReview -configuration Release \

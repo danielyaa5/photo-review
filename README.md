@@ -2,7 +2,10 @@
 <h1 align="center">Photo Review</h1>
 <p align="center">See what is filling your iCloud Photos storage, then shrink the videos or delete what you don't need.</p>
 
-![The library view, largest items first, with a shrink queue running](assets/screenshot-library.png)
+![Previewing a video, selecting three, shrinking them and seeing the space saved](assets/demo.gif)
+
+<sub>The demo uses made-up data. In real use macOS asks you to confirm before anything is deleted; that
+dialog isn't shown here.</sub>
 
 Photos on the Mac can't sort by file size, so a handful of huge videos can quietly use most of an iCloud plan.
 Photo Review lists everything in your library from largest to smallest, lets you preview each item, and gives
@@ -26,10 +29,12 @@ is uploaded anywhere.
   deleted items go to Recently Deleted for 30 days.
 - **Savings page.** A running total of what you have freed, what is still waiting on you, and a log of every
   shrink attempt and deletion.
+- **Quick to reopen.** Measuring a large library takes a minute or more, so the result is kept for a day.
+  The page says when it was measured, and "Update now" measures again.
 
-| Choosing how far to shrink | Savings and history |
-|---|---|
-| ![The shrink dialog with a per-video size estimate](assets/screenshot-shrink.png) | ![The savings page](assets/screenshot-savings.png) |
+| The library, with a queue running | Choosing how far to shrink | Savings and history |
+|---|---|---|
+| ![The library view, largest first](assets/screenshot-library.png) | ![The shrink dialog with a per-video size estimate](assets/screenshot-shrink.png) | ![The savings page](assets/screenshot-savings.png) |
 
 The screenshots use made-up data.
 
@@ -60,7 +65,8 @@ and Intel Macs with macOS 13 or later, though it has only been tested on macOS 2
 
 On first launch macOS asks whether Photo Review may access your Photos library; choose **Allow Full Access**,
 since it needs to read sizes, add shrunk copies and delete what you select. Your browser then opens at
-`http://127.0.0.1:8377`. Measuring a large library takes about a minute, with the biggest videos shown first.
+`http://127.0.0.1:8377`. The first measurement of a large library takes a minute or more, with the biggest
+videos shown first; after that the app opens straight away for the rest of the day.
 
 Keep the small Photo Review window open while you work. Closing it quits the app.
 
@@ -91,7 +97,8 @@ for Photos access separately for each.
 - **Dolby Vision.** The copy keeps the HDR picture. Whether the iPhone's extra Dolby Vision metadata survives
   has not been checked; if it doesn't, the video still plays as HDR.
 - **iCloud space is freed later.** Deleted items count against your storage until they leave Recently Deleted.
-- **Changes made elsewhere** (new photos, deletions in the Photos app) show up after restarting Photo Review.
+- **Changes made elsewhere** (new photos, deletions in the Photos app) don't show up until the library is
+  measured again: once a day, or when you click "Update now".
 
 ## How it is built
 
@@ -99,7 +106,7 @@ One Swift file and two HTML pages, with no dependencies beyond macOS itself.
 
 - `main.swift`: the app. It reads the library through PhotoKit (Apple's supported interface, not the library
   database), serves the pages from a loopback-only HTTP server, re-encodes with AVFoundation and VideoToolbox,
-  and keeps a history file in `~/Library/Application Support/Photo Review/`.
+  and keeps its history and the day's measurement in `~/Library/Application Support/Photo Review/`.
 - `index.html` and `stats.html`: the library view and the savings page.
 - `build.sh`: compiles and signs the app locally.
 - `release/`: builds the signed, notarized download (needs a paid Apple Developer team signed in to Xcode).
@@ -107,8 +114,8 @@ One Swift file and two HTML pages, with no dependencies beyond macOS itself.
 State-changing requests need a token that only the page served by the app has, and requests arriving under
 any other hostname are rejected, so other websites can't drive it.
 
-For development, `--port N` runs a second copy on another port and `--history FILE` points it at a different
-history file. A shrink request with `"dryRun": true` encodes to a temporary file and adds nothing to Photos.
+For development, `--port N` runs a second copy on another port, and `--history FILE` and `--cache FILE` point
+it at different data files. A shrink request with `"dryRun": true` encodes to a temporary file and adds nothing to Photos.
 
 ## Similar projects
 

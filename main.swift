@@ -19,6 +19,19 @@ func log(_ message: String) {
     FileHandle.standardError.write(Data((message + "\n").utf8))
 }
 
+/// Where the app keeps a file between runs: ~/Library/Application Support/Photo Review, unless the given
+/// command-line flag names another path (used for testing).
+func dataFile(_ name: String, flag: String) -> URL {
+    let arguments = CommandLine.arguments
+    if let index = arguments.firstIndex(of: flag), index + 1 < arguments.count {
+        return URL(fileURLWithPath: arguments[index + 1])
+    }
+    let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("Photo Review")
+    try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    return folder.appendingPathComponent(name)
+}
+
 // MARK: - Library
 
 struct Item {
@@ -37,25 +50,55 @@ struct Item {
 
     var json: [String: Any] {
         [
-            "id": id, "name": name, "bytes": bytes, "date": date, "video": isVideo,
+            "id": id, "name": name, "bytes": bytes, "date": date, "year": year, "video": isVideo,
             "w": width, "h": height, "dur": duration, "fav": favorite, "tags": tags,
         ]
+    }
+}
+
+extension Item {
+    /// Rebuilds an item from `json`, as stored in the measurement cache.
+    init?(_ json: [String: Any]) {
+        guard let id = json["id"] as? String, let name = json["name"] as? String,
+            let bytes = (json["bytes"] as? NSNumber)?.int64Value
+        else { return nil }
+        self.init(
+            id: id, name: name, bytes: bytes, date: json["date"] as? String ?? "", year: json["year"] as? Int ?? 0,
+            isVideo: json["video"] as? Bool ?? false, width: json["w"] as? Int ?? 0, height: json["h"] as? Int ?? 0,
+            duration: (json["dur"] as? NSNumber)?.doubleValue ?? 0, favorite: json["fav"] as? Bool ?? false,
+            tags: json["tags"] as? [String] ?? [])
     }
 }
 
 final class Library {
     private let lock = NSLock()
     private var items: [String: Item] = [:]
+    /// starting, scanning (first measurement), updating (re-measuring while the old list stays usable),
+    /// ready, denied or limited.
     private var status = "starting"
     private var total = 0
     private var scanned = 0
+    /// When the list was last measured from Photos.
+    private var measuredAt: Date?
+    /// Items added or removed by the app while a re-measure is running, applied once it finishes.
+    private var changedDuringUpdate: [(id: String, item: Item?)] = []
+    private var saveQueued = false
+
+    /// Measuring a big library takes about a minute, so the result is kept and reused for a day.
+    private let cacheFile = dataFile("library.json", flag: "--cache")
+    private static let cacheVersion = 1
+    private static let cacheLifetime: TimeInterval = 24 * 60 * 60
 
     func start() {
         PHPhotoLibrary.requestAuthorization(for: .readWrite) { auth in
             switch auth {
             case .authorized:
-                self.setStatus("scanning")
-                DispatchQueue.global(qos: .userInitiated).async { self.scan() }
+                if self.loadCache() {
+                    self.setStatus("ready")
+                } else {
+                    self.setStatus("scanning")
+                    DispatchQueue.global(qos: .userInitiated).async { self.scan(replacing: false) }
+                }
             case .limited:
                 self.setStatus("limited")
             default:
@@ -71,25 +114,107 @@ final class Library {
         log("status: \(value)")
     }
 
-    private func scan() {
+    /// Measures the library again, keeping the current list in place until the new one is complete.
+    /// Returns false if there is nothing to update yet or a measurement is already running.
+    @discardableResult
+    func update() -> Bool {
+        lock.lock()
+        let idle = status == "ready"
+        if idle {
+            status = "updating"
+            scanned = 0
+        }
+        lock.unlock()
+        if idle { DispatchQueue.global(qos: .userInitiated).async { self.scan(replacing: true) } }
+        return idle
+    }
+
+    private func scan(replacing: Bool) {
         // Videos first: they hold most of the space, so the top of the list settles quickly.
         let groups = [PHAsset.fetchAssets(with: .video, options: nil), PHAsset.fetchAssets(with: .image, options: nil)]
         lock.lock()
         total = groups.reduce(0) { $0 + $1.count }
+        scanned = 0
+        changedDuringUpdate = []
         lock.unlock()
         let calendar = Calendar.current
+        var fresh: [String: Item] = [:]
         for group in groups {
             group.enumerateObjects { asset, _, _ in
                 autoreleasepool {
                     let item = Library.makeItem(asset, calendar)
                     self.lock.lock()
-                    self.items[item.id] = item
+                    // A first measurement fills the visible list as it goes; an update swaps in at the end.
+                    if replacing { fresh[item.id] = item } else { self.items[item.id] = item }
                     self.scanned += 1
                     self.lock.unlock()
                 }
             }
         }
+        lock.lock()
+        if replacing {
+            items = fresh
+            for change in changedDuringUpdate { items[change.id] = change.item }
+        }
+        changedDuringUpdate = []
+        measuredAt = Date()
+        lock.unlock()
+        saveCache()
         setStatus("ready")
+    }
+
+    /// Loads the saved measurement if there is one from the last day. Returns false otherwise.
+    private func loadCache() -> Bool {
+        guard let data = try? Data(contentsOf: cacheFile),
+            let saved = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+            saved["version"] as? Int == Library.cacheVersion,
+            let stamp = (saved["measuredAt"] as? NSNumber)?.doubleValue,
+            let list = saved["items"] as? [[String: Any]]
+        else { return false }
+        let measured = Date(timeIntervalSince1970: stamp)
+        let age = Date().timeIntervalSince(measured)
+        guard age >= 0, age < Library.cacheLifetime else { return false }
+        var loaded: [String: Item] = [:]
+        for entry in list {
+            if let item = Item(entry) { loaded[item.id] = item }
+        }
+        guard !loaded.isEmpty else { return false }
+        lock.lock()
+        items = loaded
+        measuredAt = measured
+        total = loaded.count
+        scanned = loaded.count
+        lock.unlock()
+        log("loaded \(loaded.count) items measured \(Int(age / 60)) min ago")
+        return true
+    }
+
+    private func saveCache() {
+        lock.lock()
+        saveQueued = false
+        let list = items.values.map { $0.json }
+        let stamp = measuredAt?.timeIntervalSince1970
+        lock.unlock()
+        guard let stamp = stamp else { return }
+        let saved: [String: Any] = ["version": Library.cacheVersion, "measuredAt": stamp, "items": list]
+        guard let data = try? JSONSerialization.data(withJSONObject: saved) else { return }
+        try? data.write(to: cacheFile, options: .atomic)
+    }
+
+    /// Saves shortly, folding together changes that arrive in a burst (a batch delete, say).
+    private func saveCacheSoon() {
+        lock.lock()
+        let already = saveQueued
+        saveQueued = true
+        lock.unlock()
+        if already { return }
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 2) { self.saveCache() }
+    }
+
+    /// Records a change the app itself made to the library. Call with the lock held.
+    private func noteChange(_ id: String, _ item: Item?) {
+        items[id] = item
+        if status == "updating" { changedDuringUpdate.append((id, item)) }
     }
 
     private static func makeItem(_ asset: PHAsset, _ calendar: Calendar) -> Item {
@@ -131,8 +256,12 @@ final class Library {
     func query(kind: String, year: Int?, offset: Int, limit: Int) -> [String: Any] {
         lock.lock()
         let all = Array(items.values)
-        let state: [String: Any] = ["status": status, "scanned": scanned, "total": total]
+        var state: [String: Any] = ["status": status, "scanned": scanned, "total": total]
+        state["measuredAt"] = measuredAt.map { $0.timeIntervalSince1970 as Any } ?? NSNull()
+        let stale = status == "ready" && (measuredAt.map { Date().timeIntervalSince($0) > Library.cacheLifetime } ?? false)
         lock.unlock()
+        // Left running for more than a day, the app refreshes itself the next time someone looks.
+        if stale { update() }
 
         var years: [Int: (bytes: Int64, count: Int)] = [:]
         var libraryBytes: Int64 = 0
@@ -160,10 +289,11 @@ final class Library {
         PHAsset.fetchAssets(withLocalIdentifiers: [id], options: nil).firstObject
     }
 
+    /// True once there is a complete list to work from, including while it is being re-measured.
     var isReady: Bool {
         lock.lock()
         defer { lock.unlock() }
-        return status == "ready"
+        return status == "ready" || status == "updating"
     }
 
     func item(_ id: String) -> Item? {
@@ -176,8 +306,9 @@ final class Library {
     func add(_ asset: PHAsset) -> Item {
         let item = Library.makeItem(asset, Calendar.current)
         lock.lock()
-        items[item.id] = item
+        noteChange(item.id, item)
         lock.unlock()
+        saveCacheSoon()
         return item
     }
 
@@ -277,8 +408,9 @@ final class Library {
         }) { ok, error in
             if ok {
                 self.lock.lock()
-                for id in found { self.items[id] = nil }
+                for id in found { self.noteChange(id, nil) }
                 self.lock.unlock()
+                self.saveCacheSoon()
                 completion(true, nil)
             } else if (error as NSError?)?.code == 3072 {
                 completion(false, "Cancelled. Nothing was deleted.")
@@ -305,15 +437,7 @@ final class History {
     private let clock = ISO8601DateFormatter()
 
     init() {
-        let arguments = CommandLine.arguments
-        if let flag = arguments.firstIndex(of: "--history"), flag + 1 < arguments.count {
-            file = URL(fileURLWithPath: arguments[flag + 1])
-        } else {
-            let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("Photo Review")
-            try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-            file = folder.appendingPathComponent("history.jsonl")
-        }
+        file = dataFile("history.jsonl", flag: "--history")
         guard let text = try? String(contentsOf: file, encoding: .utf8) else { return }
         for line in text.split(separator: "\n") {
             if let event = (try? JSONSerialization.jsonObject(with: Data(line.utf8))) as? [String: Any] {
@@ -1129,6 +1253,8 @@ final class Server {
             sendJSON(connection, ["ok": started > 0, "started": started, "error": started > 0 ? "" : "No videos to shrink."])
         case ("GET", "/api/jobs"):
             sendJSON(connection, ["jobs": converter.list()])
+        case ("POST", "/api/update"):
+            sendJSON(connection, ["ok": library.update()])
         case ("POST", "/api/jobs/cancel"):
             let payload = (try? JSONSerialization.jsonObject(with: request.body)) as? [String: Any]
             converter.cancel(payload?["id"] as? Int ?? 0)
@@ -1157,6 +1283,10 @@ final class Server {
     }
 
     private func serveVideo(_ request: Request, _ connection: NWConnection) {
+        // Only videos have something to play; anything else is simply not found.
+        guard library.item(request.query["id"] ?? "")?.isVideo == true else {
+            return send(connection, 404, "text/plain", Data("not a video".utf8))
+        }
         library.videoURL(id: request.query["id"] ?? "") { url in
             guard let url = url else {
                 return self.send(connection, 504, "text/plain", Data("Photos didn't provide the video".utf8))

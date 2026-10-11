@@ -31,6 +31,8 @@
   .top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
   .top a { color: var(--accent); }
   #summary { color: var(--muted); }
+  #fresh { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  button.link { border: 0; background: none; padding: 0; color: var(--accent); text-decoration: underline; font-size: inherit; }
   #progress { height: 3px; background: var(--line); border-radius: 2px; margin-top: 10px; overflow: hidden; }
   #progress div { height: 100%; width: 0; background: var(--accent); transition: width .4s; }
   .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 14px; }
@@ -126,6 +128,7 @@
 <header>
   <div class="top"><h1><img src="/icon.svg" alt="">Photo Review</h1><a href="/stats">Savings and history</a></div>
   <div id="summary">Loading…</div>
+  <div id="fresh" hidden><span id="freshtext"></span> <button id="update" class="link">Update now</button></div>
   <div id="progress"><div></div></div>
   <div class="filters">
     <div class="seg" id="kinds">
@@ -196,7 +199,7 @@
 const TOKEN = "__TOKEN__";
 const PAGE = 60;
 // `marked` is the selection (id -> item); `viewing` is the item open in the viewer, `current` its index in the list or -1.
-const state = { items: [], marked: new Map(), kind: "all", year: "", match: 0, status: "starting", current: -1, viewing: null, busy: false, jobs: new Map(), gone: new Set(), downloading: false, offline: false };
+const state = { items: [], marked: new Map(), kind: "all", year: "", match: 0, status: "starting", current: -1, viewing: null, busy: false, jobs: new Map(), gone: new Set(), downloading: false, offline: false, measuredAt: null, updating: "" };
 const $ = (id) => document.getElementById(id);
 
 function size(bytes) {
@@ -241,6 +244,7 @@ async function post(path, body) {
 }
 
 // Fetches `limit` items from `offset`; replaces the list unless appending.
+const SETTLED = ["ready", "denied", "limited"];
 let loadCount = 0;
 async function load({ offset = 0, limit = PAGE, append = false } = {}) {
   const mine = ++loadCount;
@@ -257,6 +261,10 @@ async function load({ offset = 0, limit = PAGE, append = false } = {}) {
   // A slower, older request must not overwrite the list a newer one (say, after a filter change) produced.
   if (mine !== loadCount) return;
   state.status = data.status;
+  // While the library is being measured or updated, keep checking. Scheduling it here, from whichever
+  // request actually got applied, means a superseded request can't leave the page stuck mid-update.
+  clearTimeout(poll.timer);
+  if (!SETTLED.includes(state.status)) poll.timer = setTimeout(poll, 2500);
   state.match = data.matchCount;
   state.items = append ? state.items.concat(data.items) : data.items;
   renderHeader(data);
@@ -265,11 +273,16 @@ async function load({ offset = 0, limit = PAGE, append = false } = {}) {
 
 function renderHeader(data) {
   const scanning = data.status === "scanning" || data.status === "starting";
+  const updating = data.status === "updating";
   $("summary").textContent = scanning
     ? `Measuring your library… ${data.scanned.toLocaleString()} of ${data.total.toLocaleString()} items (${size(data.libraryBytes)} so far)`
     : `${size(data.libraryBytes)} in ${data.libraryCount.toLocaleString()} items, largest first. Sizes include edits and Live Photo video.`;
-  $("progress").hidden = !scanning;
+  $("progress").hidden = !scanning && !updating;
   $("progress").firstElementChild.style.width = data.total ? (100 * data.scanned / data.total) + "%" : "0";
+  // The measurement is kept for a day, so say how old it is and offer a fresh one.
+  state.measuredAt = data.measuredAt;
+  state.updating = updating ? `Updating… ${data.scanned.toLocaleString()} of ${data.total.toLocaleString()} items checked.` : "";
+  renderFreshness();
   $("match").textContent = data.matchCount ? `${data.matchCount.toLocaleString()} items · ${size(data.matchBytes)}` : "";
 
   const select = $("year");
@@ -292,6 +305,23 @@ function renderHeader(data) {
 
 // Cards are only rebuilt when the list itself changes, so refreshes don't swap buttons out from under a click.
 let gridKey = null;
+function renderFreshness() {
+  const known = state.updating || state.measuredAt;
+  $("fresh").hidden = !known;
+  if (!known) return;
+  $("freshtext").textContent = state.updating || `Measured ${ago(Date.now() / 1000 - state.measuredAt)}. Changes made in Photos since then aren't shown.`;
+  $("update").hidden = Boolean(state.updating);
+}
+// How long ago, in words: "just now", "25 minutes ago", "3 hours ago", "2 days ago".
+function ago(seconds) {
+  if (seconds < 90) return "just now";
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} minutes ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.round(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
 function renderGrid() {
   const key = state.items.map((item) => item.id + ":" + item.bytes).join("|");
   if (key !== gridKey) {
@@ -301,8 +331,15 @@ function renderGrid() {
       mark.onclick = () => toggle(item);
       const reveal = el("button", { textContent: "Open in Photos" });
       reveal.onclick = () => openInPhotos(item);
+      const picture = el("img", { loading: "lazy", alt: "", src: "/thumb?size=480&id=" + encodeURIComponent(item.id) });
+      // One more try if a thumbnail fails, since Photos is sometimes slow to produce one.
+      picture.onerror = () => {
+        if (picture.dataset.retried) return;
+        picture.dataset.retried = "1";
+        setTimeout(() => (picture.src = picture.src + "&again=1"), 1500);
+      };
       const thumb = el("div", { className: "thumb" }, [
-        el("img", { loading: "lazy", alt: item.name, src: "/thumb?size=480&id=" + encodeURIComponent(item.id) }),
+        picture,
         ...(item.video ? [el("span", { className: "badge", textContent: "▶ " + duration(item.dur) })] : []),
       ]);
       thumb.onclick = () => view(index);
@@ -562,7 +599,7 @@ function renderJobs(jobs) {
       }
       : () => view(-1, job.newItem);
     // Lets the original be picked for deletion even if this page was reloaded while the job ran.
-    row.pick.hidden = !job.newItem || job.originalDeleted;
+    row.pick.hidden = !job.newItem || job.originalDeleted || job.deletion === "pending";
     row.reveal.hidden = job.originalDeleted;
     row.pick.textContent = state.marked.has(job.assetId) ? "Original selected" : "Select original";
     row.pick.onclick = () => { toggle(job.item); renderJobs(jobs); };
@@ -604,15 +641,25 @@ async function pollJobs() {
     else renderBar();
   }
   // Keeps a slow watch when idle so jobs started from another tab still show up.
-  pollJobs.timer = setTimeout(pollJobs, jobs.some((job) => ACTIVE.includes(job.state)) ? 1500 : 6000);
+  // A pending deletion counts as activity: the row should change soon after the macOS dialog is answered.
+  const lively = jobs.some((job) => ACTIVE.includes(job.state) || (job.deletion === "pending" && !job.originalDeleted));
+  pollJobs.timer = setTimeout(pollJobs, lively ? 1500 : 6000);
 }
 pollJobs();
 
 // While the library is still being measured, keep the first page fresh.
 async function poll() {
+  clearTimeout(poll.timer);
   if (!state.viewing && !state.busy) await load({ limit: Math.max(PAGE, state.items.length) });
-  if (state.status !== "ready" && state.status !== "denied" && state.status !== "limited") setTimeout(poll, 2500);
+  else if (!SETTLED.includes(state.status)) poll.timer = setTimeout(poll, 2500);
 }
+$("update").onclick = async () => {
+  const result = await post("/api/update", {});
+  if (!result.ok && result.error) toast(result.error);
+  poll();
+};
+// Keep "measured 5 minutes ago" honest while the page sits open.
+setInterval(renderFreshness, 60000);
 poll();
 </script>
 </body>

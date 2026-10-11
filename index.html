@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Photo Review</title>
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<style>
+  :root {
+    --bg: #f5f5f2; --card: #ffffff; --fg: #1b1b1d; --muted: #6a6a70; --line: #e1e1dc;
+    --accent: #0a62d0; --danger: #c22f28; --shade: rgba(0, 0, 0, .55);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151517; --card: #212124; --fg: #f1f1f2; --muted: #9b9ba2; --line: #34343a;
+      --accent: #63a6ff; --danger: #ff6a60; --shade: rgba(0, 0, 0, .7);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 -apple-system, system-ui, sans-serif; }
+  button, select { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 1px solid var(--line); background: var(--card); border-radius: 7px; padding: 6px 12px; }
+  button:disabled { opacity: .5; cursor: default; }
+  button.danger { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  select { border: 1px solid var(--line); background: var(--card); border-radius: 7px; padding: 6px 8px; }
+
+  header { padding: 20px 20px 12px; max-width: 1500px; margin: 0 auto; }
+  h1 { margin: 0 0 2px; font-size: 20px; display: flex; align-items: center; gap: 8px; }
+  h1 img { width: 28px; height: 28px; }
+  .top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .top a { color: var(--accent); }
+  #summary { color: var(--muted); }
+  #progress { height: 3px; background: var(--line); border-radius: 2px; margin-top: 10px; overflow: hidden; }
+  #progress div { height: 100%; width: 0; background: var(--accent); transition: width .4s; }
+  .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 14px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; background: var(--card); }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  #match { color: var(--muted); margin-left: auto; }
+
+  main { padding: 4px 20px 110px; max-width: 1500px; margin: 0 auto; }
+  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .card.marked { outline: 3px solid var(--accent); outline-offset: -1px; }
+  .thumb { position: relative; aspect-ratio: 4 / 3; background: #000; cursor: zoom-in; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .badge { position: absolute; right: 6px; bottom: 6px; background: var(--shade); color: #fff; font-size: 12px; padding: 1px 6px; border-radius: 5px; }
+  .info { padding: 9px 10px 10px; }
+  .size { font-size: 16px; font-weight: 650; }
+  .meta { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .actions { display: flex; gap: 6px; margin-top: 8px; }
+  .actions button { flex: 1; padding: 5px 6px; font-size: 13px; }
+  .card.marked .mark { background: var(--accent); border-color: var(--accent); color: #fff; }
+  #more { display: block; margin: 22px auto 0; padding: 9px 22px; }
+  .notice { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; max-width: 620px; }
+
+  #bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line); padding: 12px 20px; display: none; align-items: center; gap: 12px; }
+  #bar.on { display: flex; }
+  #bar .count { font-weight: 650; }
+  #bar .hint { color: var(--muted); font-size: 12px; flex: 1; }
+  #toast { position: fixed; left: 50%; bottom: 80px; transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 9px 16px; border-radius: 8px; display: none; max-width: 80vw; }
+
+  #jobs { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+  #jobs .head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  #jobs .head b { flex: 1; }
+  .job { display: grid; grid-template-columns: minmax(120px, 1.2fr) minmax(160px, 2fr) auto; gap: 4px 12px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); }
+  .job .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .job .status { color: var(--muted); font-size: 13px; }
+  .job .status.bad { color: var(--danger); }
+  .job .track { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; margin-top: 4px; }
+  .job .track div { height: 100%; background: var(--accent); }
+  .job button { padding: 4px 10px; font-size: 13px; }
+  .job .buttons { display: flex; gap: 6px; }
+
+  #shrink { position: fixed; inset: 0; background: var(--shade); display: none; align-items: center; justify-content: center; z-index: 20; padding: 16px; }
+  #shrink.on { display: flex; }
+  #shrink .dialog { background: var(--card); border-radius: 12px; padding: 20px 22px; width: 100%; max-width: 520px; max-height: 100%; overflow: auto; }
+  #shrink h2 { margin: 0 0 6px; font-size: 18px; }
+  #shrink p { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+  #shrink label { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0; }
+  #shrink select { width: 230px; }
+  #spreview { max-height: 170px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; margin-top: 12px; font-size: 13px; }
+  #spreview .line { display: flex; justify-content: space-between; gap: 12px; padding: 6px 10px; white-space: nowrap; }
+  #spreview .line + .line { border-top: 1px solid var(--line); }
+  #spreview .name { overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+  #spreview .skip { color: var(--muted); }
+  #shrink #sestimate { color: var(--fg); font-size: 14px; margin-top: 14px; }
+  #shrink .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+
+  #viewer { position: fixed; inset: 0; background: rgba(0, 0, 0, .92); display: none; flex-direction: column; z-index: 10; }
+  #viewer.on { display: flex; }
+  #stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  #stage img, #stage video { max-width: 100%; max-height: 100%; border-radius: 6px; background: #000; }
+  #stage .player { display: flex; flex-direction: column; align-items: center; max-width: 100%; height: 100%; justify-content: center; }
+  #stage .player video { min-height: 0; }
+  #stage .loading { color: #fff; margin: 10px 0 0; text-align: center; }
+  #viewbar { background: var(--card); border-top: 1px solid var(--line); padding: 12px 20px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  #viewbar .title { flex: 1; min-width: 200px; }
+  #viewbar .title b { font-size: 16px; }
+  #viewbar .keys { color: var(--muted); font-size: 12px; width: 100%; }
+
+  /* Narrow windows: stack the job rows and let the action bar wrap instead of running off the edge. */
+  @media (max-width: 760px) {
+    header { padding: 16px 14px 10px; }
+    main { padding: 4px 14px 190px; }
+    #match { margin-left: 0; flex-basis: 100%; }
+    .job { grid-template-columns: 1fr; }
+    #bar { flex-wrap: wrap; padding: 10px 14px; gap: 8px; }
+    #bar .count { flex-basis: 100%; }
+    #bar .hint { order: 5; flex-basis: 100%; }
+    #bar button { flex: 1; }
+    #shrink label { flex-direction: column; align-items: stretch; gap: 4px; }
+    #shrink select { width: 100%; }
+    #spreview .line { flex-direction: column; gap: 0; white-space: normal; }
+    #viewbar { padding: 10px 14px; gap: 8px; }
+    #viewbar .title { flex: 1 1 100%; overflow-wrap: anywhere; }
+    #viewbar button { flex: 1; padding: 6px 8px; }
+    #viewbar .keys { display: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="top"><h1><img src="/icon.svg" alt="">Photo Review</h1><a href="/stats">Savings and history</a></div>
+  <div id="summary">Loading…</div>
+  <div id="progress"><div></div></div>
+  <div class="filters">
+    <div class="seg" id="kinds">
+      <button data-kind="all" aria-pressed="true">All</button>
+      <button data-kind="video" aria-pressed="false">Videos</button>
+      <button data-kind="photo" aria-pressed="false">Photos</button>
+    </div>
+    <select id="year" aria-label="Year"><option value="">All years</option></select>
+    <span id="match"></span>
+  </div>
+</header>
+
+<main>
+  <div id="notice" class="notice" hidden></div>
+  <section id="jobs" hidden>
+    <div class="head"><b>Shrinking videos</b><button id="jclear">Clear finished</button></div>
+    <div id="joblist"></div>
+  </section>
+  <div id="grid"></div>
+  <button id="more" hidden>Show more</button>
+</main>
+
+<div id="bar">
+  <span class="count" id="selcount"></span>
+  <span class="hint">Deleted items move to Recently Deleted in Photos for 30 days. iCloud space is freed when they leave it.</span>
+  <button id="clear">Clear</button>
+  <button id="shrinkopen">Shrink…</button>
+  <button id="delete" class="danger">Delete…</button>
+</div>
+
+<div id="shrink">
+  <div class="dialog" role="dialog" aria-labelledby="stitle">
+    <h2 id="stitle">Shrink videos</h2>
+    <p>Each video is downloaded from iCloud at full quality, re-encoded on this Mac, and added to Photos as a new item with the same date, location, favorite and albums. The original stays until you delete it.</p>
+    <label>Resolution <select id="sres">
+      <option value="keep">Keep original</option><option value="2160">4K at most</option>
+      <option value="1080">1080p at most</option><option value="720">720p at most</option></select></label>
+    <label>Frame rate <select id="sfps">
+      <option value="keep">Keep original</option><option value="30">30 fps at most</option><option value="24">24 fps at most</option></select></label>
+    <label>Format <select id="scodec">
+      <option value="hevc">HEVC (smallest)</option><option value="h264">H.264 (plays everywhere)</option></select></label>
+    <label>Quality <select id="squality">
+      <option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
+    <div id="spreview"></div>
+    <p id="sestimate"></p>
+    <p>HDR videos stay HDR and are always saved as HEVC. Edits are baked in, and captions, keywords and people tags don't carry over.</p>
+    <div class="row"><button id="scancel">Cancel</button><button id="sstart" class="primary">Start</button></div>
+  </div>
+</div>
+<div id="toast" role="status"></div>
+
+<div id="viewer">
+  <div id="stage"></div>
+  <div id="viewbar">
+    <div class="title"><b id="vsize"></b> <span id="vmeta"></span></div>
+    <button id="vprev">← Previous</button>
+    <button id="vnext">Next →</button>
+    <button id="vreveal">Open in Photos</button>
+    <button id="vmark"></button>
+    <button id="vclose">Close</button>
+    <div class="keys">← → to move · X to select or deselect · Esc to close</div>
+  </div>
+</div>
+
+<script>
+const TOKEN = "__TOKEN__";
+const PAGE = 60;
+// `marked` is the selection (id -> item); `viewing` is the item open in the viewer, `current` its index in the list or -1.
+const state = { items: [], marked: new Map(), kind: "all", year: "", match: 0, status: "starting", current: -1, viewing: null, busy: false, jobs: new Map(), downloading: false, offline: false };
+const $ = (id) => document.getElementById(id);
+
+function size(bytes) {
+  if (bytes >= 1e9) return (bytes / 1e9).toFixed(2) + " GB";
+  if (bytes >= 1e6) return Math.round(bytes / 1e6) + " MB";
+  return (bytes > 0 ? Math.max(1, Math.round(bytes / 1e3)) : 0) + " KB";
+}
+function duration(seconds) {
+  const s = Math.round(seconds), m = Math.floor(s / 60);
+  return m >= 60 ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}` : `${m}:${String(s % 60).padStart(2, "0")}`;
+}
+// A rough length of time in words: "40 sec", "12 min", "1 h 35 min".
+function span(seconds) {
+  if (seconds < 90) return Math.max(1, Math.round(seconds)) + " sec";
+  const minutes = Math.round(seconds / 60);
+  return minutes < 60 ? minutes + " min" : `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+}
+function el(tag, props = {}, children = []) {
+  const node = Object.assign(document.createElement(tag), props);
+  node.append(...children);
+  return node;
+}
+function toast(message) {
+  $("toast").textContent = message;
+  $("toast").style.display = "block";
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => ($("toast").style.display = "none"), 5000);
+}
+// Always resolves to an object with `ok`, so callers only need to show `error`.
+async function post(path, body) {
+  try {
+    const response = await fetch(path, { method: "POST", headers: { "X-Token": TOKEN, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (response.status === 403) {
+      // The app hands out a new token each time it starts, so a page from an earlier run is refused.
+      setTimeout(() => location.reload(), 1500);
+      return { ok: false, error: "Photo Review was restarted, so this page is out of date. Reloading…" };
+    }
+    return await response.json();
+  } catch (error) {
+    return { ok: false, error: "Photo Review isn't responding. Check that the app is still open." };
+  }
+}
+
+// Fetches `limit` items from `offset`; replaces the list unless appending.
+let loadCount = 0;
+async function load({ offset = 0, limit = PAGE, append = false } = {}) {
+  const mine = ++loadCount;
+  const params = new URLSearchParams({ offset, limit, kind: state.kind, year: state.year });
+  let data;
+  try {
+    data = await (await fetch("/api/items?" + params)).json();
+  } catch (error) {
+    $("summary").textContent = "Photo Review isn't responding. Open the Photo Review app, then reload this page.";
+    state.offline = true;
+    return;
+  }
+  state.offline = false;
+  // A slower, older request must not overwrite the list a newer one (say, after a filter change) produced.
+  if (mine !== loadCount) return;
+  state.status = data.status;
+  state.match = data.matchCount;
+  state.items = append ? state.items.concat(data.items) : data.items;
+  renderHeader(data);
+  renderGrid();
+}
+
+function renderHeader(data) {
+  const scanning = data.status === "scanning" || data.status === "starting";
+  $("summary").textContent = scanning
+    ? `Measuring your library… ${data.scanned.toLocaleString()} of ${data.total.toLocaleString()} items (${size(data.libraryBytes)} so far)`
+    : `${size(data.libraryBytes)} in ${data.libraryCount.toLocaleString()} items, largest first. Sizes include edits and Live Photo video.`;
+  $("progress").hidden = !scanning;
+  $("progress").firstElementChild.style.width = data.total ? (100 * data.scanned / data.total) + "%" : "0";
+  $("match").textContent = data.matchCount ? `${data.matchCount.toLocaleString()} items · ${size(data.matchBytes)}` : "";
+
+  const select = $("year");
+  const wanted = ["", ...data.years.map((y) => String(y.year))];
+  if (wanted.join() !== [...select.options].map((o) => o.value).join()) {
+    select.replaceChildren(el("option", { value: "", textContent: "All years" }),
+      ...data.years.map((y) => el("option", { value: y.year, textContent: `${y.year || "No date"} · ${size(y.bytes)}` })));
+    select.value = state.year;
+  }
+
+  const notice = $("notice");
+  const messages = {
+    denied: "Photo Review doesn't have access to your Photos library. Turn it on in System Settings → Privacy & Security → Photos, then quit and reopen Photo Review.",
+    limited: "Photo Review only has access to selected photos. Give it full access in System Settings → Privacy & Security → Photos, then quit and reopen Photo Review.",
+    starting: "Waiting for permission. Look for a dialog from Photo Review asking to access your Photos library and choose Allow.",
+  };
+  notice.hidden = !messages[data.status];
+  notice.textContent = messages[data.status] || "";
+}
+
+// Cards are only rebuilt when the list itself changes, so refreshes don't swap buttons out from under a click.
+let gridKey = null;
+function renderGrid() {
+  const key = state.items.map((item) => item.id + ":" + item.bytes).join("|");
+  if (key !== gridKey) {
+    gridKey = key;
+    $("grid").replaceChildren(...state.items.map((item, index) => {
+      const mark = el("button", { className: "mark" });
+      mark.onclick = () => toggle(item);
+      const reveal = el("button", { textContent: "Open in Photos" });
+      reveal.onclick = () => openInPhotos(item);
+      const thumb = el("div", { className: "thumb" }, [
+        el("img", { loading: "lazy", alt: item.name, src: "/thumb?size=480&id=" + encodeURIComponent(item.id) }),
+        ...(item.video ? [el("span", { className: "badge", textContent: "▶ " + duration(item.dur) })] : []),
+      ]);
+      thumb.onclick = () => view(index);
+      const details = [item.date || "No date", `${item.w}×${item.h}`, ...(item.fav ? ["♥"] : []), ...(item.tags || [])].join(" · ");
+      const card = el("div", { className: "card" }, [
+        thumb,
+        el("div", { className: "info" }, [
+          el("div", { className: "size", textContent: size(item.bytes) }),
+          el("div", { className: "meta", textContent: details, title: details }),
+          el("div", { className: "meta", textContent: item.name, title: item.name }),
+          el("div", { className: "actions" }, [mark, reveal]),
+        ]),
+      ]);
+      card.dataset.id = item.id;
+      return card;
+    }));
+  }
+  for (const card of $("grid").children) {
+    const selected = state.marked.has(card.dataset.id);
+    card.classList.toggle("marked", selected);
+    card.querySelector(".mark").textContent = selected ? "Selected" : "Select";
+  }
+  $("more").hidden = state.items.length >= state.match;
+  renderBar();
+}
+
+function renderBar() {
+  let bytes = 0, videos = 0;
+  state.marked.forEach((item) => { bytes += item.bytes; if (item.video) videos++; });
+  $("bar").classList.toggle("on", state.marked.size > 0);
+  $("selcount").textContent = `${state.marked.size} selected · ${size(bytes)}`;
+  $("shrinkopen").textContent = `Shrink ${videos} video${videos === 1 ? "" : "s"}…`;
+  $("shrinkopen").disabled = videos === 0;
+  $("delete").textContent = state.busy ? "Confirm in the Photo Review dialog…" : `Delete ${state.marked.size} item${state.marked.size === 1 ? "" : "s"}…`;
+  $("delete").disabled = state.busy;
+}
+
+function toggle(item) {
+  if (state.marked.has(item.id)) state.marked.delete(item.id);
+  else state.marked.set(item.id, item);
+  renderGrid();
+  if (state.viewing) renderViewerBar();
+}
+
+async function openInPhotos(item) {
+  const result = await post("/api/reveal", { id: item.id });
+  if (!result.ok) toast("Couldn't open it in Photos: " + result.error);
+}
+
+// Viewer
+function view(index, item = state.items[index]) {
+  state.current = index;
+  state.viewing = item;
+  const stage = $("stage");
+  const id = encodeURIComponent(item.id);
+  const poster = "/thumb?size=1600&id=" + id;
+  if (item.video) {
+    // Videos that live only in iCloud take a few seconds while Photos fetches a smaller copy.
+    const busy = "Photos fetches one thing from iCloud at a time, and it's busy downloading an original to shrink. Previews of iCloud-only videos have to wait until that's done.";
+    const note = el("p", { className: "loading", textContent: state.downloading ? busy : "Getting the video from Photos… this can take a few seconds if it's only in iCloud." });
+    const video = el("video", { controls: true, autoplay: true, poster, src: "/video?id=" + id });
+    video.onloadeddata = () => note.remove();
+    video.onerror = () => { note.textContent = state.downloading ? busy : "This video couldn't be loaded here. Use Open in Photos to watch it."; video.removeAttribute("controls"); };
+    stage.replaceChildren(el("div", { className: "player" }, [video, note]));
+  } else {
+    stage.replaceChildren(el("img", { src: poster, alt: item.name }));
+  }
+  $("viewer").classList.add("on");
+  renderViewerBar();
+}
+function renderViewerBar() {
+  const item = state.viewing;
+  const place = state.current >= 0 ? ` · ${state.current + 1} of ${state.match.toLocaleString()}` : "";
+  $("vsize").textContent = size(item.bytes);
+  $("vmeta").textContent = ` · ${item.date || "No date"} · ${item.name}${item.video ? " · " + duration(item.dur) : ""}${place}`;
+  $("vmark").textContent = state.marked.has(item.id) ? "Deselect" : "Select";
+  $("vmark").className = state.marked.has(item.id) ? "primary" : "";
+  $("vprev").disabled = state.current <= 0;
+  $("vnext").disabled = state.current < 0 || state.current >= state.match - 1;
+}
+function closeViewer() {
+  state.current = -1;
+  state.viewing = null;
+  $("stage").replaceChildren();
+  $("viewer").classList.remove("on");
+}
+async function step(delta) {
+  const next = state.current + delta;
+  if (state.current < 0 || next < 0 || next >= state.match) return;
+  if (next >= state.items.length) await load({ offset: state.items.length, append: true });
+  if (next < state.items.length) view(next);
+}
+
+// Events
+$("kinds").onclick = (event) => {
+  const kind = event.target.dataset.kind;
+  if (!kind) return;
+  state.kind = kind;
+  for (const button of $("kinds").children) button.setAttribute("aria-pressed", button.dataset.kind === kind);
+  load();
+};
+$("year").onchange = () => { state.year = $("year").value; load(); };
+$("more").onclick = () => load({ offset: state.items.length, append: true });
+$("clear").onclick = () => { state.marked.clear(); renderGrid(); pollJobs(); };
+$("delete").onclick = async () => {
+  const doomed = [...state.marked.values()];
+  const bytes = doomed.reduce((sum, item) => sum + item.bytes, 0);
+  state.busy = true;
+  renderBar();
+  const result = await post("/api/delete", { ids: doomed.map((item) => item.id) });
+  state.busy = false;
+  if (result.ok) {
+    toast(`Moved ${doomed.length} item${doomed.length === 1 ? "" : "s"} (${size(bytes)}) to Recently Deleted.`);
+    for (const item of doomed) state.marked.delete(item.id);
+    await load({ limit: Math.max(PAGE, state.items.length) });
+  } else {
+    toast(result.error || "Nothing was deleted.");
+  }
+  renderBar();
+};
+$("vprev").onclick = () => step(-1);
+$("vnext").onclick = () => step(1);
+$("vclose").onclick = closeViewer;
+$("vmark").onclick = () => toggle(state.viewing);
+$("vreveal").onclick = () => openInPhotos(state.viewing);
+$("stage").onclick = (event) => { if (event.target === $("stage")) closeViewer(); };
+document.addEventListener("keydown", (event) => {
+  if ($("shrink").classList.contains("on")) { if (event.key === "Escape") $("shrink").classList.remove("on"); return; }
+  if (!state.viewing || event.metaKey || event.ctrlKey || event.altKey) return;
+  if (event.key === "Escape") closeViewer();
+  else if (event.key === "ArrowLeft") step(-1);
+  else if (event.key === "ArrowRight") step(1);
+  else if (event.key.toLowerCase() === "x") toggle(state.viewing);
+});
+
+// Shrinking
+const selectedVideos = () => [...state.marked.values()].filter((item) => item.video);
+const shrinkOptions = () => ({ resolution: $("sres").value, fps: $("sfps").value, codec: $("scodec").value, quality: $("squality").value });
+
+// Mirrors ShrinkSettings.bitrate in main.swift, plus a small allowance for audio. The original frame rate
+// isn't known until the video is downloaded, so `fps` is a guess when the rate is kept.
+function estimate(item, options, fps) {
+  let w = item.w, h = item.h;
+  const short = Math.min(w, h), cap = Number(options.resolution);
+  if (cap && short > cap) { w *= cap / short; h *= cap / short; }
+  const base = { high: 24e6, medium: 12e6, low: 6e6 }[options.quality];
+  const rate = base * Math.pow((w * h) / (3840 * 2160), 0.75) * Math.pow(fps / 30, 0.6) * (options.codec === "h264" ? 1.7 : 1);
+  return (rate + 2e5) * item.dur / 8;
+}
+// Low and high guesses for one video, or null when it would be skipped as already small enough.
+function preview(item, options) {
+  const cap = Number(options.fps);
+  const low = estimate(item, options, cap || 30), high = estimate(item, options, cap || 60);
+  return low > item.bytes * 0.8 ? null : { low, high: Math.min(high, item.bytes) };
+}
+function range(low, high) {
+  return size(low) === size(high) ? size(low) : `${size(low)} to ${size(high)}`;
+}
+function renderEstimate() {
+  const videos = selectedVideos(), options = shrinkOptions();
+  let before = 0, low = 0, high = 0, skipped = 0;
+  $("spreview").replaceChildren(...videos.map((item) => {
+    const guess = preview(item, options);
+    before += item.bytes;
+    low += guess ? guess.low : item.bytes;
+    high += guess ? guess.high : item.bytes;
+    if (!guess) skipped++;
+    // The app decides for real once it has the file; a 60 fps original near the limit can still be skipped then.
+    const unsure = guess && options.fps === "keep" && estimate(item, options, 60) > item.bytes * 0.8;
+    return el("div", { className: "line" + (guess ? "" : " skip") }, [
+      el("span", { className: "name", textContent: item.name, title: item.name }),
+      el("span", { textContent: !guess ? `${size(item.bytes)}, already this small` : `${size(item.bytes)} → ${range(guess.low, guess.high)}${unsure ? " (may be skipped)" : ""}` }),
+    ]);
+  }));
+  $("stitle").textContent = `Shrink ${videos.length} video${videos.length === 1 ? "" : "s"}`;
+  let text = `Total: ${size(before)} → about ${range(low, high)}, freeing ${range(before - high, before - low)}.`;
+  if (options.fps === "keep") text += " The higher figure applies to videos shot at 60 fps.";
+  if (skipped) text += ` ${skipped} will be skipped.`;
+  $("sestimate").textContent = text;
+  $("sstart").disabled = skipped === videos.length;
+}
+$("shrinkopen").onclick = () => { renderEstimate(); $("shrink").classList.add("on"); };
+$("scancel").onclick = () => $("shrink").classList.remove("on");
+for (const id of ["sres", "sfps", "scodec", "squality"]) $(id).onchange = renderEstimate;
+$("sstart").onclick = async () => {
+  const videos = selectedVideos();
+  const result = await post("/api/shrink", { ids: videos.map((item) => item.id), ...shrinkOptions() });
+  $("shrink").classList.remove("on");
+  if (!result.ok) return toast(result.error);
+  // Originals are selected again one by one as their smaller copies arrive.
+  for (const item of videos) state.marked.delete(item.id);
+  renderGrid();
+  pollJobs();
+};
+$("jclear").onclick = async () => { await post("/api/jobs/clear", {}); pollJobs(); };
+
+const ACTIVE = ["queued", "downloading", "encoding", "saving"];
+function jobStatus(job) {
+  const percent = Math.round(job.progress * 100) + "%";
+  switch (job.state) {
+    case "queued": return "Waiting";
+    case "downloading": {
+      // Photos reports progress in whole percents, so a large original shows nothing for its first minutes.
+      const waited = span(job.seconds || 0);
+      const left = job.remaining == null ? "" : ` · about ${span(job.remaining)} left`;
+      const progress = job.progress > 0
+        ? `${percent} of ${size(job.originalBytes)}${left}`
+        : `waiting for the first 1% of ${size(job.originalBytes)} (${waited} so far)`;
+      return "Getting the original from iCloud · " + progress + (job.message ? ". " + job.message : "");
+    }
+    case "encoding": return "Re-encoding · " + percent;
+    case "saving": return "Adding to Photos";
+    case "done": {
+      const saved = `${size(job.originalBytes)} → ${size(job.newBytes)}, saves ${Math.round(100 * (1 - job.newBytes / job.originalBytes))}%.`;
+      if (!job.newItem) return saved + " Test run: nothing was added to Photos.";
+      return saved + (job.originalDeleted ? " Original deleted." : " Check the new copy, then delete the original.");
+    }
+    default: return job.message;
+  }
+}
+// Rows are updated in place so a button isn't replaced while it's being clicked.
+const jobRows = new Map();
+function renderJobs(jobs) {
+  $("jobs").hidden = jobs.length === 0;
+  for (const [id, row] of jobRows) {
+    if (!jobs.some((job) => job.id === id)) { row.node.remove(); jobRows.delete(id); }
+  }
+  for (const job of jobs) {
+    let row = jobRows.get(job.id);
+    if (!row) {
+      row = { status: el("div", { className: "status" }), bar: el("div"), action: el("button"), pick: el("button"), reveal: el("button", { textContent: "Open in Photos" }) };
+      row.reveal.onclick = () => openInPhotos(job.item);
+      row.track = el("div", { className: "track" }, [row.bar]);
+      row.node = el("div", { className: "job" }, [
+        el("div", { className: "name", textContent: job.name, title: job.name }), el("div", {}, [row.status, row.track]),
+        el("div", { className: "buttons" }, [row.reveal, row.pick, row.action]),
+      ]);
+      jobRows.set(job.id, row);
+      $("joblist").append(row.node);
+    }
+    const active = ACTIVE.includes(job.state);
+    row.status.textContent = jobStatus(job);
+    row.status.classList.toggle("bad", job.state === "failed");
+    row.track.hidden = job.state !== "downloading" && job.state !== "encoding";
+    row.bar.style.width = Math.round(job.progress * 100) + "%";
+    const retry = job.state === "failed" || job.state === "cancelled";
+    row.action.textContent = active ? "Cancel" : retry ? "Try again" : "View new copy";
+    row.action.hidden = !active && !retry && !job.newItem;
+    row.action.onclick = active ? async () => { await post("/api/jobs/cancel", { id: job.id }); pollJobs(); }
+      : retry ? async () => {
+        const result = await post("/api/shrink", { ids: [job.assetId], ...job.settings });
+        if (!result.ok) toast(result.error);
+        pollJobs();
+      }
+      : () => view(-1, job.newItem);
+    // Lets the original be picked for deletion even if this page was reloaded while the job ran.
+    row.pick.hidden = !job.newItem || job.originalDeleted;
+    row.reveal.hidden = job.originalDeleted;
+    row.pick.textContent = state.marked.has(job.assetId) ? "Original selected" : "Select original";
+    row.pick.onclick = () => { toggle(job.item); renderJobs(jobs); };
+  }
+}
+async function pollJobs() {
+  clearTimeout(pollJobs.timer);
+  let jobs;
+  try {
+    jobs = (await (await fetch("/api/jobs")).json()).jobs;
+  } catch (error) {
+    // The app may be restarting; keep watching rather than going quiet for good.
+    pollJobs.timer = setTimeout(pollJobs, 6000);
+    return;
+  }
+  let finished = 0;
+  for (const job of jobs) {
+    const before = state.jobs.get(job.id);
+    if (job.state === "done" && job.newItem && before && before !== "done") {
+      // Select the original so it's ready to delete once the new copy has been checked.
+      state.marked.set(job.assetId, job.item);
+      finished++;
+    }
+    state.jobs.set(job.id, job.state);
+  }
+  state.downloading = jobs.some((job) => job.state === "downloading");
+  renderJobs(jobs);
+  // The app is answering again after a spell of not responding, so refresh the list too.
+  if (state.offline && !state.viewing && !state.busy) await load({ limit: Math.max(PAGE, state.items.length) });
+  if (finished) {
+    toast(`${finished} smaller cop${finished === 1 ? "y is" : "ies are"} in Photos. The original${finished === 1 ? " is" : "s are"} selected, ready to delete.`);
+    if (!state.viewing && !state.busy) await load({ limit: Math.max(PAGE, state.items.length) });
+    else renderBar();
+  }
+  // Keeps a slow watch when idle so jobs started from another tab still show up.
+  pollJobs.timer = setTimeout(pollJobs, jobs.some((job) => ACTIVE.includes(job.state)) ? 1500 : 6000);
+}
+pollJobs();
+
+// While the library is still being measured, keep the first page fresh.
+async function poll() {
+  if (!state.viewing && !state.busy) await load({ limit: Math.max(PAGE, state.items.length) });
+  if (state.status !== "ready" && state.status !== "denied" && state.status !== "limited") setTimeout(poll, 2500);
+}
+poll();
+</script>
+</body>
+</html>

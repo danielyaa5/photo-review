@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Savings · Photo Review</title>
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<style>
+  :root {
+    --bg: #f5f5f2; --card: #ffffff; --fg: #1b1b1d; --muted: #6a6a70; --line: #e1e1dc;
+    --accent: #0a62d0; --track: #cfe0f7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151517; --card: #212124; --fg: #f1f1f2; --muted: #9b9ba2; --line: #34343a;
+      --accent: #63a6ff; --track: #263f5f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 -apple-system, system-ui, sans-serif; }
+  a { color: var(--accent); }
+  .page { max-width: 1100px; margin: 0 auto; padding: 20px 20px 60px; }
+  .top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  h1 { margin: 0; font-size: 20px; display: flex; align-items: center; gap: 8px; }
+  h1 img { width: 28px; height: 28px; }
+  button { font: inherit; font-size: 13px; color: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--card); border-radius: 7px; padding: 3px 9px; white-space: nowrap; }
+  .links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  #toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 9px 16px; border-radius: 8px; display: none; max-width: 80vw; }
+  h2 { margin: 30px 0 8px; font-size: 16px; }
+  .muted { color: var(--muted); }
+
+  .hero { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 22px 24px; margin-top: 16px; }
+  .hero .label { color: var(--muted); }
+  .hero .value { font-size: 52px; font-weight: 650; line-height: 1.15; letter-spacing: -.5px; }
+  .hero .note { color: var(--muted); max-width: 70ch; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 12px; }
+  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .tile .label { color: var(--muted); font-size: 13px; }
+  .tile .value { font-size: 26px; font-weight: 650; }
+  .tile .note { color: var(--muted); font-size: 13px; }
+
+  .scroll { overflow-x: auto; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 9px 14px; border-top: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 13px; border-top: 0; white-space: nowrap; }
+  td.number, th.number { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.name { min-width: 170px; max-width: 320px; overflow-wrap: anywhere; }
+  td.when { white-space: nowrap; color: var(--muted); }
+  /* The whole bar is the original's size; the filled part is what the smaller copy takes. */
+  .meter { height: 8px; min-width: 120px; border-radius: 4px; background: var(--track); overflow: hidden; margin-top: 6px; }
+  .meter div { height: 100%; min-width: 2px; border-radius: 4px; background: var(--accent); }
+  .empty { background: var(--card); border: 1px dashed var(--line); border-radius: 12px; padding: 22px; color: var(--muted); margin-top: 16px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="top"><h1><img src="/icon.svg" alt="">Savings and history</h1><a href="/">Back to the library</a></div>
+  <div id="content"><p class="muted">Loading…</p></div>
+</div>
+<div id="toast" role="status"></div>
+
+<script>
+const TOKEN = "__TOKEN__";
+const $ = (id) => document.getElementById(id);
+function toast(message) {
+  $("toast").textContent = message;
+  $("toast").style.display = "block";
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => ($("toast").style.display = "none"), 5000);
+}
+// Shows one library item in the Photos app.
+async function openInPhotos(id) {
+  let result;
+  try {
+    const response = await fetch("/api/reveal", { method: "POST", headers: { "X-Token": TOKEN, "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    if (response.status === 403) return location.reload();  // the app was restarted; this page is stale
+    result = await response.json();
+  } catch (error) {
+    result = { ok: false, error: "Photo Review isn't responding." };
+  }
+  if (!result.ok) toast("Couldn't open it in Photos: " + result.error);
+}
+function photosButton(label, id) {
+  const button = el("button", { textContent: label });
+  button.onclick = () => openInPhotos(id);
+  return button;
+}
+function el(tag, props = {}, children = []) {
+  const node = Object.assign(document.createElement(tag), props);
+  node.append(...children);
+  return node;
+}
+function size(bytes) {
+  const b = Math.abs(bytes);
+  if (b >= 1e9) return (b / 1e9).toFixed(2) + " GB";
+  if (b >= 1e6) return Math.round(b / 1e6) + " MB";
+  return (b > 0 ? Math.max(1, Math.round(b / 1e3)) : 0) + " KB";
+}
+function span(seconds) {
+  if (seconds < 90) return Math.round(seconds) + " sec";
+  const minutes = Math.round(seconds / 60);
+  return minutes < 60 ? minutes + " min" : `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+}
+const when = (time) => new Date(time).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+const plural = (count, word) => `${count.toLocaleString()} ${word}${count === 1 ? "" : "s"}`;
+function settings(s) {
+  if (!s) return "";
+  const parts = [s.resolution === "keep" ? "original size" : s.resolution === "2160" ? "4K" : s.resolution + "p",
+    s.fps === "keep" ? "original frame rate" : s.fps + " fps", s.codec === "h264" ? "H.264" : "HEVC", s.quality];
+  return parts.join(", ");
+}
+function tile(label, value, note) {
+  return el("div", { className: "tile" }, [
+    el("div", { className: "label", textContent: label }), el("div", { className: "value", textContent: value }),
+    el("div", { className: "note", textContent: note }),
+  ]);
+}
+function table(headers, rows) {
+  return el("div", { className: "scroll" }, [el("table", {}, [
+    el("thead", {}, [el("tr", {}, headers.map(([text, cls]) => el("th", { textContent: text, className: cls || "" })))]),
+    el("tbody", {}, rows),
+  ])]);
+}
+const cell = (text, className = "") => el("td", { textContent: text, className });
+
+function render(data) {
+  const events = data.events;
+  const shrinks = events.filter((e) => e.type === "shrink");
+  const done = shrinks.filter((e) => e.outcome === "done");
+  const unfinished = shrinks.filter((e) => e.outcome !== "done");
+  const deletes = events.filter((e) => e.type === "delete");
+  if (!events.length) {
+    return [el("div", { className: "empty", textContent: "Nothing here yet. Shrink or delete something in the library and it will show up on this page." })];
+  }
+
+  const deletedItems = deletes.flatMap((e) => e.items || []);
+  const deletedBytes = deletedItems.reduce((sum, item) => sum + item.bytes, 0);
+  const addedBytes = done.reduce((sum, e) => sum + e.newBytes, 0);
+  const net = deletedBytes - addedBytes;
+  // A shrunk video only saves space once its original is gone; until then the library holds both.
+  const waiting = done.filter((e) => e.originalExists && e.copyExists);
+  const waitingBytes = waiting.reduce((sum, e) => sum + e.originalBytes, 0);
+
+  const hero = el("div", { className: "hero" }, [
+    el("div", { className: "label", textContent: net >= 0 ? "Space saved so far" : "Library has grown by" }),
+    el("div", { className: "value", textContent: size(net) }),
+    el("div", { className: "note", textContent:
+      `${size(deletedBytes)} deleted, minus ${size(addedBytes)} added as smaller copies. ` +
+      (waiting.length ? `Deleting the ${plural(waiting.length, "original")} that already ${waiting.length === 1 ? "has" : "have"} a smaller copy would save another ${size(waitingBytes)}. ` : "") +
+      "Deleted items sit in Recently Deleted for 30 days, and iCloud space is freed when they leave it." }),
+  ]);
+
+  const outcomes = ["done", "failed", "skipped", "cancelled"].map((o) => [o, shrinks.filter((e) => e.outcome === o).length]).filter(([, n]) => n);
+  const tiles = el("div", { className: "tiles" }, [
+    tile("Deleted", size(deletedBytes), plural(deletedItems.length, "item") + ` in ${plural(deletes.length, "deletion")}`),
+    tile("Added by shrinking", size(addedBytes), plural(done.length, "smaller copy").replace("copys", "copies")),
+    tile("Ready to free", size(waitingBytes), waiting.length ? plural(waiting.length, "original") + " with a smaller copy" : "No originals waiting"),
+    tile("Shrink attempts", shrinks.length.toLocaleString(), outcomes.map(([o, n]) => `${n} ${o}`).join(", ") || "None yet"),
+  ]);
+
+  const sections = [hero, tiles];
+  if (!data.ready) sections.push(el("p", { className: "muted", textContent: "Still measuring the library, so whether originals are still present may be out of date for a minute." }));
+
+  if (done.length) {
+    sections.push(el("h2", { textContent: "Shrunk videos" }), table(
+      [["When"], ["Video"], ["Before and after"], ["Saved", "number"], ["Original"], ["Time taken"], ["Settings"]],
+      [...done].reverse().map((e) => {
+        const share = e.originalBytes ? e.newBytes / e.originalBytes : 0;
+        const fill = el("div");
+        fill.style.width = Math.max(1, share * 100) + "%";
+        const meter = el("div", { className: "meter", title: `${size(e.newBytes)} of ${size(e.originalBytes)}` }, [fill]);
+        const original = !e.copyExists ? "Smaller copy deleted" : e.originalExists ? "Still in the library" : "Deleted";
+        const taken = [e.downloadSeconds ? span(e.downloadSeconds) + " download" : "", span(e.encodeSeconds || 0) + " encode"].filter(Boolean).join(", ");
+        // Only items still in the library can be shown in Photos.
+        const links = el("div", { className: "links" }, [
+          ...(e.copyExists ? [photosButton("Open copy in Photos", e.newId)] : []),
+          ...(e.originalExists ? [photosButton("Open original in Photos", e.assetId)] : []),
+        ]);
+        return el("tr", {}, [
+          cell(when(e.time), "when"), el("td", { className: "name" }, [el("div", { textContent: e.name }), links]),
+          el("td", {}, [el("div", { textContent: `${size(e.originalBytes)} → ${size(e.newBytes)}` }), meter]),
+          cell(`${size(e.originalBytes - e.newBytes)} (${Math.round(100 * (1 - share))}%)`, "number"),
+          cell(original), cell(taken), cell(settings(e.settings)),
+        ]);
+      })));
+  }
+  if (deletes.length) {
+    sections.push(el("h2", { textContent: "Deletions" }), table(
+      [["When"], ["Items"], ["Size", "number"]],
+      [...deletes].reverse().map((e) => {
+        const items = e.items || [];
+        const names = items.slice(0, 3).map((item) => item.name).join(", ") + (items.length > 3 ? ` and ${items.length - 3} more` : "");
+        return el("tr", {}, [cell(when(e.time), "when"), cell(`${plural(items.length, "item")}: ${names}`, "name"),
+          cell(size(items.reduce((sum, item) => sum + item.bytes, 0)), "number")]);
+      })));
+  }
+  if (unfinished.length) {
+    sections.push(el("h2", { textContent: "Attempts that didn't finish" }), table(
+      [["When"], ["Video"], ["Size", "number"], ["Outcome"], ["Reason"]],
+      [...unfinished].reverse().map((e) => el("tr", {}, [
+        cell(when(e.time), "when"), cell(e.name, "name"), cell(size(e.originalBytes), "number"),
+        cell(e.outcome[0].toUpperCase() + e.outcome.slice(1)), cell(e.message || ""),
+      ]))));
+  }
+  return sections;
+}
+
+let last = "";
+async function refresh() {
+  try {
+    const text = await (await fetch("/api/stats")).text();
+    // Only redraw when something changed, so text stays selectable between refreshes.
+    if (text !== last) {
+      last = text;
+      $("content").replaceChildren(...render(JSON.parse(text)));
+    }
+  } catch (error) {
+    if (!last) $("content").replaceChildren(el("p", { className: "muted", textContent: "Photo Review isn't responding. Open the app, then reload this page." }));
+  }
+  setTimeout(refresh, 5000);
+}
+refresh();
+</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+Photo Review.app/
+*.csv
+.DS_Store
+.playwright-mcp/
+LAUNCH.md

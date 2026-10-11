@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4b97f5"/>
+      <stop offset="1" stop-color="#0a4fb5"/>
+    </linearGradient>
+    <clipPath id="photo"><rect x="236" y="452" width="372" height="290" rx="46"/></clipPath>
+  </defs>
+  <!-- App tile -->
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#sky)"/>
+  <!-- The original: big, and on its way out -->
+  <rect x="236" y="282" width="552" height="460" rx="62" fill="none" stroke="#ffffff" stroke-opacity=".5"
+        stroke-width="26" stroke-dasharray="46 30" stroke-linecap="round"/>
+  <!-- The smaller copy -->
+  <rect x="236" y="452" width="372" height="290" rx="46" fill="#ffffff"/>
+  <g clip-path="url(#photo)">
+    <circle cx="340" cy="542" r="34" fill="#f7b731"/>
+    <path d="M216 760 L372 592 L470 690 L528 632 L640 760 Z" fill="#0a62d0"/>
+  </g>
+  <!-- Shrinking toward the copy -->
+  <path d="M736 334 L654 416" stroke="#ffffff" stroke-width="34" stroke-linecap="round" fill="none"/>
+  <path d="M640 346 L640 430 L724 430" stroke="#ffffff" stroke-width="34" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

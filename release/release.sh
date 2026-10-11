@@ -47,5 +47,6 @@ done
 
 APP="$BUILD/notarized/Photo Review.app"
 spctl -a -vv "$APP"
-ditto -c -k --keepParent "$APP" "$BUILD/PhotoReview-$VERSION.zip"
-echo "Built release/$BUILD/PhotoReview-$VERSION.zip"
+# The same file name every time, so the website's download button can always point at the latest release.
+ditto -c -k --keepParent "$APP" "$BUILD/PhotoReview.zip"
+echo "Built release/$BUILD/PhotoReview.zip"

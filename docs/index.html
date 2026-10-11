@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Photo Review: free up iCloud Photos storage on your Mac</title>
+<meta name="description" content="A free Mac app that shows which photos and videos are using your iCloud storage, then lets you shrink the big videos or delete what you don't need.">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Photo Review: free up iCloud Photos storage on your Mac">
+<meta property="og:description" content="See which photos and videos are using your iCloud storage, then shrink the big videos or delete what you don't need. Free and open source.">
+<meta property="og:image" content="https://danielyaa5.github.io/photo-review/screenshot-library.png">
+<meta property="og:url" content="https://danielyaa5.github.io/photo-review/">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+  :root {
+    --bg: #f5f5f2; --card: #ffffff; --fg: #1b1b1d; --muted: #5f5f66; --line: #e1e1dc;
+    --accent: #0a62d0; --accent-ink: #ffffff; --soft: #e9f1fc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151517; --card: #212124; --fg: #f1f1f2; --muted: #a3a3aa; --line: #34343a;
+      --accent: #4c97f7; --accent-ink: #0b1220; --soft: #1b2a40;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  a { color: var(--accent); }
+  img { max-width: 100%; height: auto; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 22px; }
+  section { padding: 44px 0; }
+  h1 { font-size: clamp(30px, 5.2vw, 50px); line-height: 1.1; letter-spacing: -.02em; margin: 18px 0 14px; }
+  h2 { font-size: clamp(24px, 3.4vw, 32px); line-height: 1.2; letter-spacing: -.01em; margin: 0 0 18px; }
+  h3 { font-size: 19px; margin: 0 0 6px; }
+  p { margin: 0 0 12px; }
+  .muted { color: var(--muted); }
+
+  .hero { text-align: center; padding: 56px 0 28px; }
+  .hero img.icon { width: 104px; height: 104px; }
+  .hero .lede { font-size: clamp(18px, 2.2vw, 21px); color: var(--muted); max-width: 660px; margin: 0 auto 26px; }
+  .download { display: inline-block; background: var(--accent); color: var(--accent-ink); text-decoration: none; font-weight: 650; font-size: 20px; padding: 15px 30px; border-radius: 14px; }
+  .download:hover { filter: brightness(1.08); }
+  .download:focus-visible { outline: 3px solid var(--fg); outline-offset: 3px; }
+  .fine { color: var(--muted); font-size: 15px; margin-top: 14px; }
+
+  .demo { padding-top: 12px; }
+  .demo img { display: block; width: 100%; border-radius: 14px; border: 1px solid var(--line); background: var(--card); }
+  .demo p { text-align: center; font-size: 15px; margin-top: 10px; }
+
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+  @media (min-width: 640px) { .grid.two { grid-template-columns: 1fr 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; }
+  .card p:last-child { margin-bottom: 0; }
+  .step { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; background: var(--soft); color: var(--accent); font-weight: 700; margin-bottom: 10px; }
+  .example { background: var(--soft); border-radius: 14px; padding: 18px 22px; margin-top: 18px; }
+  .example b { font-size: 20px; }
+
+  ul.plain { list-style: none; margin: 0; padding: 0; }
+  ul.plain li { padding: 12px 0 12px 34px; border-top: 1px solid var(--line); position: relative; }
+  ul.plain li:first-child { border-top: 0; }
+  ul.plain li::before { content: "✓"; position: absolute; left: 4px; color: var(--accent); font-weight: 700; }
+  ul.notes li::before { content: "•"; }
+
+  details { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin-bottom: 10px; }
+  summary { cursor: pointer; font-weight: 600; }
+  details p { margin: 10px 0 0; color: var(--muted); }
+
+  .again { text-align: center; }
+  footer { border-top: 1px solid var(--line); padding: 26px 0 40px; color: var(--muted); font-size: 15px; text-align: center; }
+</style>
+</head>
+<body>
+
+<header class="hero wrap">
+  <img class="icon" src="icon.svg" alt="">
+  <h1>See what's filling your iCloud&nbsp;Photos, and get the space back</h1>
+  <p class="lede">Photo Review is a free Mac app. It lists your photos and videos from largest to smallest, then lets you shrink the big videos or delete what you don't need.</p>
+  <a class="download" href="https://github.com/danielyaa5/photo-review/releases/latest/download/PhotoReview.zip">Download for Mac</a>
+  <p class="fine">Free · under 1 MB · macOS 13 or later · signed and checked by Apple</p>
+</header>
+
+<main>
+  <section class="demo wrap" aria-label="Demo">
+    <img src="demo.gif" alt="Previewing a video, selecting three videos, shrinking them, and seeing how much space was saved" width="960" height="600">
+    <p class="muted">The demo uses made-up photos. In real use, your Mac asks you to confirm before anything is deleted.</p>
+  </section>
+
+  <section class="wrap" id="start">
+    <h2>Getting started takes about two minutes</h2>
+    <div class="grid">
+      <div class="card">
+        <div class="step">1</div>
+        <h3>Download it</h3>
+        <p>Click <a href="https://github.com/danielyaa5/photo-review/releases/latest/download/PhotoReview.zip">Download for Mac</a>. If you find a file called <b>PhotoReview.zip</b> in your Downloads folder, double-click it to unpack the app.</p>
+      </div>
+      <div class="card">
+        <div class="step">2</div>
+        <h3>Open it</h3>
+        <p>Drag <b>Photo Review</b> into your Applications folder and double-click it. Your Mac will ask whether you're sure, because it came from the internet. Choose <b>Open</b>.</p>
+      </div>
+      <div class="card">
+        <div class="step">3</div>
+        <h3>Allow access to Photos</h3>
+        <p>Choose <b>Allow Full Access</b> when asked. Your web browser then opens with your biggest photos and videos at the top. The first look takes a minute or two.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <h2>What you can do with it</h2>
+    <div class="grid two">
+      <div class="card">
+        <h3>Find the big ones</h3>
+        <p>The Photos app can't sort by size. Photo Review can: every photo and video, largest first, with a preview so you know what you're looking at.</p>
+      </div>
+      <div class="card">
+        <h3>Shrink videos</h3>
+        <p>Make a much smaller copy of a video and keep that instead. You choose how small. HDR videos stay HDR, and the date, place and albums come along.</p>
+      </div>
+      <div class="card">
+        <h3>Delete what you don't need</h3>
+        <p>Select and delete. Your Mac asks you to confirm, and deleted items wait in Recently Deleted for 30 days in case you change your mind.</p>
+      </div>
+      <div class="card">
+        <h3>See what you saved</h3>
+        <p>A running total of the space you've freed, plus a list of everything you've shrunk or deleted.</p>
+      </div>
+    </div>
+    <div class="example">
+      <p><b>25.6 GB → 855 MB</b></p>
+      <p class="muted" style="margin:0">That's one real 4-minute 4K video from an iPhone, before and after shrinking. It is still 4K and still HDR.</p>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <h2>Your photos stay yours</h2>
+    <div class="card">
+      <ul class="plain">
+        <li><b>It runs only on your Mac.</b> Photo Review doesn't upload anything, and there is no account to create.</li>
+        <li><b>Nothing is deleted without your say-so.</b> Your Mac shows its own confirmation every time.</li>
+        <li><b>Shrinking never touches the original.</b> You get a smaller copy next to it, and the original stays until you decide to delete it.</li>
+        <li><b>Anyone can check how it works.</b> The code is public and free to read.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <h2>Good to know before you start</h2>
+    <div class="card">
+      <ul class="plain notes">
+        <li><b>It's a new app.</b> So far it has only been tested on its author's Mac, on the newest macOS. Watch a shrunk copy before you delete its original, and keep a backup of anything you couldn't bear to lose.</li>
+        <li><b>Very large videos take a while.</b> A video stored in iCloud has to be downloaded before it can be shrunk, and a 25 GB one can take an hour or more.</li>
+        <li><b>Space comes back a little later.</b> Deleted items still count against your iCloud storage until they leave Recently Deleted, after 30 days or when you empty it in Photos.</li>
+        <li><b>A few details don't carry over to a shrunk copy:</b> captions, keywords and the names of people in it.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <h2>Questions</h2>
+    <details>
+      <summary>Is it really free?</summary>
+      <p>Yes. There are no ads, no accounts and nothing to buy.</p>
+    </details>
+    <details>
+      <summary>Why does it open in my web browser?</summary>
+      <p>The app shows its screen as a page in your browser. That page lives on your own Mac, at an address starting with 127.0.0.1, and isn't on the internet. Keep the small Photo Review window open while you use it.</p>
+    </details>
+    <details>
+      <summary>Will this free up space on my iPhone too?</summary>
+      <p>If iCloud Photos is turned on, yes. What you shrink or delete on your Mac changes on your iPhone and iPad as well, because they share one library.</p>
+    </details>
+    <details>
+      <summary>My Mac says it can't open the app. What now?</summary>
+      <p>Open System Settings, go to Privacy &amp; Security, scroll down, and click <b>Open Anyway</b> next to Photo Review. The app is signed and checked by Apple, so this should be rare.</p>
+    </details>
+    <details>
+      <summary>How do I quit or remove it?</summary>
+      <p>Close the small Photo Review window to quit. To remove it, drag Photo Review from Applications to the Trash. Your photos are not affected.</p>
+    </details>
+    <details>
+      <summary>Something went wrong, or I have an idea.</summary>
+      <p>Please <a href="https://github.com/danielyaa5/photo-review/issues">report it here</a>. You need a free GitHub account to post.</p>
+    </details>
+  </section>
+
+  <section class="wrap again">
+    <a class="download" href="https://github.com/danielyaa5/photo-review/releases/latest/download/PhotoReview.zip">Download for Mac</a>
+    <p class="fine">Free · under 1 MB · macOS 13 or later</p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    Photo Review is open source under the MIT licence. <a href="https://github.com/danielyaa5/photo-review">See the code on GitHub</a>.
+  </div>
+</footer>
+
+</body>
+</html>

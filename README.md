@@ -1,8 +1,9 @@
 <p align="center"><img src="assets/icon.svg" width="120" alt=""></p>
 <h1 align="center">Photo Review</h1>
 <p align="center">See what is filling your iCloud Photos storage, then shrink the videos or delete what you don't need.</p>
+<p align="center"><a href="https://danielyaa5.github.io/photo-review/"><b>Website and download</b></a></p>
 
-![Previewing a video, selecting three, shrinking them and seeing the space saved](assets/demo.gif)
+![Previewing a video, selecting three, shrinking them and seeing the space saved](docs/demo.gif)
 
 <sub>The demo uses made-up data. In real use macOS asks you to confirm before anything is deleted; that
 dialog isn't shown here.</sub>
@@ -34,7 +35,7 @@ is uploaded anywhere.
 
 | The library, with a queue running | Choosing how far to shrink | Savings and history |
 |---|---|---|
-| ![The library view, largest first](assets/screenshot-library.png) | ![The shrink dialog with a per-video size estimate](assets/screenshot-shrink.png) | ![The savings page](assets/screenshot-savings.png) |
+| ![The library view, largest first](docs/screenshot-library.png) | ![The shrink dialog with a per-video size estimate](docs/screenshot-shrink.png) | ![The savings page](docs/screenshot-savings.png) |
 
 The screenshots use made-up data.
 
@@ -56,7 +57,8 @@ Savings are largest on ProRes and high-bitrate action-camera footage.
 
 ## Install
 
-1. Download `PhotoReview-x.y.z.zip` from the [latest release](https://github.com/danielyaa5/photo-review/releases/latest).
+1. [Download PhotoReview.zip](https://github.com/danielyaa5/photo-review/releases/latest/download/PhotoReview.zip)
+   (the latest release).
 2. Unzip it and move **Photo Review** to your Applications folder.
 3. Open it.
 

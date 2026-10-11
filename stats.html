@@ -47,6 +47,13 @@
   td.number, th.number { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   td.name { min-width: 170px; max-width: 320px; overflow-wrap: anywhere; }
   td.when { white-space: nowrap; color: var(--muted); }
+  td.result { min-width: 130px; }
+  .outcome { font-weight: 600; white-space: nowrap; }
+  .outcome.skipped, .outcome.cancelled { font-weight: 400; }
+  .reason { font-size: 13px; max-width: 260px; }
+  tr.unfinished td { color: var(--muted); }
+  tr.unfinished td.name, tr.unfinished .outcome { color: var(--fg); }
+  .caption { margin: -4px 0 8px; }
   /* The whole bar is the original's size; the filled part is what the smaller copy takes. */
   .meter { height: 8px; min-width: 120px; border-radius: 4px; background: var(--track); overflow: hidden; margin-top: 6px; }
   .meter div { height: 100%; min-width: 2px; border-radius: 4px; background: var(--accent); }
@@ -128,7 +135,6 @@ function render(data) {
   const events = data.events;
   const shrinks = events.filter((e) => e.type === "shrink");
   const done = shrinks.filter((e) => e.outcome === "done");
-  const unfinished = shrinks.filter((e) => e.outcome !== "done");
   const deletes = events.filter((e) => e.type === "delete");
   if (!events.length) {
     return [el("div", { className: "empty", textContent: "Nothing here yet. Shrink or delete something in the library and it will show up on this page." })];
@@ -156,29 +162,44 @@ function render(data) {
     tile("Deleted", size(deletedBytes), plural(deletedItems.length, "item") + ` in ${plural(deletes.length, "deletion")}`),
     tile("Added by shrinking", size(addedBytes), plural(done.length, "smaller copy").replace("copys", "copies")),
     tile("Ready to free", size(waitingBytes), waiting.length ? plural(waiting.length, "original") + " with a smaller copy" : "No originals waiting"),
-    tile("Shrink attempts", shrinks.length.toLocaleString(), outcomes.map(([o, n]) => `${n} ${o}`).join(", ") || "None yet"),
+    tile("Shrink attempts", shrinks.length.toLocaleString(), outcomes.map(([o, n]) => `${n} ${o === "done" ? "completed" : o}`).join(", ") || "None yet"),
   ]);
 
   const sections = [hero, tiles];
   if (!data.ready) sections.push(el("p", { className: "muted", textContent: "Still measuring the library, so whether originals are still present may be out of date for a minute." }));
 
-  if (done.length) {
-    sections.push(el("h2", { textContent: "Shrunk videos" }), table(
-      [["When"], ["Video"], ["Before and after"], ["Saved", "number"], ["Original"], ["Time taken"], ["Settings"]],
-      [...done].reverse().map((e) => {
-        const share = e.originalBytes ? e.newBytes / e.originalBytes : 0;
+  // One table for every attempt, so it's plain which ones finished and which didn't.
+  if (shrinks.length) {
+    const results = { done: "✓ Completed", failed: "✕ Failed", skipped: "Skipped", cancelled: "Cancelled" };
+    sections.push(el("h2", { textContent: "Shrink attempts" }),
+      el("p", { className: "muted caption", textContent: "Completed means a smaller copy was added to Photos. Anything else left the library untouched." }),
+      table(
+      [["When"], ["Video"], ["Result"], ["Before and after"], ["Saved", "number"], ["Original"], ["Time taken"], ["Settings"]],
+      [...shrinks].reverse().map((e) => {
+        const finished = e.outcome === "done";
+        const share = finished && e.originalBytes ? e.newBytes / e.originalBytes : 0;
+        const result = el("td", { className: "result" }, [
+          el("div", { className: "outcome " + e.outcome, textContent: results[e.outcome] || e.outcome }),
+          ...(!finished && e.message ? [el("div", { className: "muted reason", textContent: e.message })] : []),
+        ]);
+        const taken = [e.downloadSeconds ? span(e.downloadSeconds) + " download" : "", e.encodeSeconds ? span(e.encodeSeconds) + " encode" : ""].filter(Boolean).join(", ");
+        if (!finished) {
+          return el("tr", { className: "unfinished" }, [
+            cell(when(e.time), "when"), cell(e.name, "name"), result, cell(size(e.originalBytes) + ", unchanged"),
+            cell("", "number"), cell(""), cell(taken), cell(settings(e.settings)),
+          ]);
+        }
         const fill = el("div");
         fill.style.width = Math.max(1, share * 100) + "%";
         const meter = el("div", { className: "meter", title: `${size(e.newBytes)} of ${size(e.originalBytes)}` }, [fill]);
         const original = !e.copyExists ? "Smaller copy deleted" : e.originalExists ? "Still in the library" : "Deleted";
-        const taken = [e.downloadSeconds ? span(e.downloadSeconds) + " download" : "", span(e.encodeSeconds || 0) + " encode"].filter(Boolean).join(", ");
         // Only items still in the library can be shown in Photos.
         const links = el("div", { className: "links" }, [
           ...(e.copyExists ? [photosButton("Open copy in Photos", e.newId)] : []),
           ...(e.originalExists ? [photosButton("Open original in Photos", e.assetId)] : []),
         ]);
         return el("tr", {}, [
-          cell(when(e.time), "when"), el("td", { className: "name" }, [el("div", { textContent: e.name }), links]),
+          cell(when(e.time), "when"), el("td", { className: "name" }, [el("div", { textContent: e.name }), links]), result,
           el("td", {}, [el("div", { textContent: `${size(e.originalBytes)} → ${size(e.newBytes)}` }), meter]),
           cell(`${size(e.originalBytes - e.newBytes)} (${Math.round(100 * (1 - share))}%)`, "number"),
           cell(original), cell(taken), cell(settings(e.settings)),
@@ -194,14 +215,6 @@ function render(data) {
         return el("tr", {}, [cell(when(e.time), "when"), cell(`${plural(items.length, "item")}: ${names}`, "name"),
           cell(size(items.reduce((sum, item) => sum + item.bytes, 0)), "number")]);
       })));
-  }
-  if (unfinished.length) {
-    sections.push(el("h2", { textContent: "Attempts that didn't finish" }), table(
-      [["When"], ["Video"], ["Size", "number"], ["Outcome"], ["Reason"]],
-      [...unfinished].reverse().map((e) => el("tr", {}, [
-        cell(when(e.time), "when"), cell(e.name, "name"), cell(size(e.originalBytes), "number"),
-        cell(e.outcome[0].toUpperCase() + e.outcome.slice(1)), cell(e.message || ""),
-      ]))));
   }
   return sections;
 }

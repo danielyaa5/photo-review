@@ -54,7 +54,8 @@
   tr.unfinished td { color: var(--muted); }
   tr.unfinished td.name, tr.unfinished .outcome { color: var(--fg); }
   .caption { margin: -4px 0 8px; }
-  /* The whole bar is the original's size; the filled part is what the smaller copy takes. */
+  .metercap { font-size: 12px; margin-top: 3px; white-space: nowrap; }
+  /* A size comparison, not progress: the whole bar is the original's size, the filled part the copy's. */
   .meter { height: 8px; min-width: 120px; border-radius: 4px; background: var(--track); overflow: hidden; margin-top: 6px; }
   .meter div { height: 100%; min-width: 2px; border-radius: 4px; background: var(--accent); }
   .empty { background: var(--card); border: 1px dashed var(--line); border-radius: 12px; padding: 22px; color: var(--muted); margin-top: 16px; }
@@ -109,6 +110,8 @@ function span(seconds) {
   const minutes = Math.round(seconds / 60);
   return minutes < 60 ? minutes + " min" : `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
 }
+// A share as a percentage, without rounding a small one down to nothing.
+const percentOf = (share) => (share < 0.01 ? "under 1%" : Math.round(share * 100) + "%");
 const when = (time) => new Date(time).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 const plural = (count, word) => `${count.toLocaleString()} ${word}${count === 1 ? "" : "s"}`;
 function settings(s) {
@@ -174,7 +177,7 @@ function render(data) {
     sections.push(el("h2", { textContent: "Shrink attempts" }),
       el("p", { className: "muted caption", textContent: "Completed means a smaller copy was added to Photos. Anything else left the library untouched." }),
       table(
-      [["When"], ["Video"], ["Result"], ["Before and after"], ["Saved", "number"], ["Original"], ["Time taken"], ["Settings"]],
+      [["When"], ["Video"], ["Result"], ["Size before and after"], ["Saved", "number"], ["Original"], ["Time taken"], ["Settings"]],
       [...shrinks].reverse().map((e) => {
         const finished = e.outcome === "done";
         const share = finished && e.originalBytes ? e.newBytes / e.originalBytes : 0;
@@ -200,7 +203,8 @@ function render(data) {
         ]);
         return el("tr", {}, [
           cell(when(e.time), "when"), el("td", { className: "name" }, [el("div", { textContent: e.name }), links]), result,
-          el("td", {}, [el("div", { textContent: `${size(e.originalBytes)} → ${size(e.newBytes)}` }), meter]),
+          el("td", {}, [el("div", { textContent: `${size(e.originalBytes)} → ${size(e.newBytes)}` }), meter,
+            el("div", { className: "muted metercap", textContent: `Copy is ${percentOf(share)} of the original's size` })]),
           cell(`${size(e.originalBytes - e.newBytes)} (${Math.round(100 * (1 - share))}%)`, "number"),
           cell(original), cell(taken), cell(settings(e.settings)),
         ]);

@@ -21,6 +21,8 @@ is uploaded anywhere.
   Photo video. Filter by type or year.
 - **Preview before deciding.** Thumbnails for everything, and in-page playback for videos, including ones
   that are only in iCloud.
+- **Two separate picks.** Each item has its own Shrink and Delete buttons, so you can line up some videos to
+  shrink and other things to delete in one pass. A video in the queue shows its progress on its tile.
 - **Shrink videos.** Pick a resolution cap (4K, 1080p, 720p), a frame-rate cap, HEVC or H.264, and a quality
   level. A size estimate updates as you choose. The smaller copy is added to Photos with the original's date,
   location, favorite flag and albums.

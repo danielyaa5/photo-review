@@ -389,9 +389,12 @@ function renderGrid() {
   renderBar();
 }
 
-// What a shrink job means for the video's tile: a short label, and progress when there is some.
-function tileWork(job) {
-  if (!job) return null;
+// What the shrink queue and past shrinks mean for a video's tile: a short label, and progress when
+// there is some. `item.copy` is the smaller copy made earlier, there for as long as both are in Photos.
+function tileWork(job, item) {
+  const shrunk = (bytes) => ({ text: `Shrunk to ${size(bytes)} · original not deleted` });
+  const earlier = item?.copy ? shrunk(item.copy.bytes) : null;
+  if (!job) return earlier;
   const percent = Math.round(job.progress * 100);
   switch (job.state) {
     case "queued": return { text: "Waiting to be shrunk", busy: true };
@@ -401,20 +404,21 @@ function tileWork(job) {
     case "done":
       if (!job.newItem || job.originalDeleted) return null;
       // While its deletion is waiting on the macOS confirmation, the original is spoken for.
-      return job.deletion === "pending" ? { text: "Smaller copy ready · deleting this original", busy: true } : { text: "Smaller copy ready" };
+      return job.deletion === "pending" ? { text: "Smaller copy ready · deleting this original", busy: true } : shrunk(job.newBytes);
     case "failed": return { text: "Couldn't be shrunk" };
     case "skipped": return { text: "Already small enough" };
-    default: return null;
+    default: return earlier;
   }
 }
 const isBusy = (id) => Boolean(tileWork(state.work.get(id))?.busy);
 
 // Brings every tile in line with the selections and the shrink queue, without rebuilding the tiles.
 function renderTiles() {
+  const items = new Map(state.items.map((item) => [item.id, item]));
   for (const card of $("grid").children) {
     const id = card.dataset.id;
     const shrinking = state.toShrink.has(id), doingBoth = state.toBoth.has(id), deleting = state.toDelete.has(id);
-    const work = tileWork(state.work.get(id));
+    const work = tileWork(state.work.get(id), items.get(id));
     card.classList.toggle("shrinking", shrinking);
     card.classList.toggle("both", doingBoth);
     card.classList.toggle("deleting", deleting);
@@ -497,7 +501,7 @@ function renderViewerBar() {
   const item = state.viewing;
   const place = state.current >= 0 ? ` · ${state.current + 1} of ${state.match.toLocaleString()}` : "";
   $("vsize").textContent = size(item.bytes);
-  $("vmeta").textContent = ` · ${item.date || "No date"} · ${item.name}${item.video ? " · " + duration(item.dur) : ""}${place}`;
+  $("vmeta").textContent = ` · ${item.date || "No date"} · ${item.name}${item.video ? " · " + duration(item.dur) : ""}${place}${item.copy ? ` · already shrunk to ${size(item.copy.bytes)}, original not deleted` : ""}`;
   const busy = isBusy(item.id);
   $("vshrink").hidden = !item.video;
   $("vshrink").textContent = state.toShrink.has(item.id) ? "✓ Shrink" : "Shrink";

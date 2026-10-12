@@ -480,6 +480,19 @@ final class History {
         defer { lock.unlock() }
         return events
     }
+
+    /// For every video that has been shrunk, the id of its latest smaller copy (original id -> copy id).
+    func copies() -> [String: String] {
+        lock.lock()
+        defer { lock.unlock() }
+        var copies: [String: String] = [:]
+        for event in events where event["type"] as? String == "shrink" && event["outcome"] as? String == "done" {
+            if let original = event["assetId"] as? String, let copy = event["newId"] as? String, !copy.isEmpty {
+                copies[original] = copy
+            }
+        }
+        return copies
+    }
 }
 
 // MARK: - Shrinking
@@ -1236,9 +1249,20 @@ final class Server {
             }
             sendJSON(connection, ["ready": library.isReady, "events": events])
         case ("GET", "/api/items"):
-            let result = library.query(
+            var result = library.query(
                 kind: request.query["kind"] ?? "all", year: Int(request.query["year"] ?? ""),
                 offset: Int(request.query["offset"] ?? "") ?? 0, limit: min(Int(request.query["limit"] ?? "") ?? 60, 2000))
+            // A video whose smaller copy is in Photos while the original is still here carries that copy
+            // along. This comes from the history file, so its tile can say so after the app is restarted.
+            let copies = history.copies()
+            if !copies.isEmpty, let items = result["items"] as? [[String: Any]] {
+                result["items"] = items.map { item -> [String: Any] in
+                    guard let copy = copies[item["id"] as? String ?? ""].flatMap({ library.item($0) }) else { return item }
+                    var item = item
+                    item["copy"] = copy.json
+                    return item
+                }
+            }
             sendJSON(connection, result)
         case ("GET", "/thumb"):
             let size = min(max(Int(request.query["size"] ?? "") ?? 480, 64), 2400)

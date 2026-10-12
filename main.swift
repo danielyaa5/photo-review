@@ -532,10 +532,11 @@ struct ShrinkSettings {
     }
 
     /// Target video bitrate in bits per second. index.html mirrors this for its estimate.
-    func bitrate(width: Int, height: Int, fps: Double) -> Double {
+    /// `hevc` is the format the copy will really be in, which is HEVC for HDR and 10-bit video whatever was chosen.
+    func bitrate(width: Int, height: Int, fps: Double, hevc: Bool? = nil) -> Double {
         let base = quality == "low" ? 6e6 : quality == "medium" ? 12e6 : 24e6  // HEVC at 4K, 30 fps
         let pixels = Double(width * height) / (3840 * 2160)
-        return base * pow(pixels, 0.75) * pow(max(fps, 1) / 30, 0.6) * (hevc ? 1 : 1.7)
+        return base * pow(pixels, 0.75) * pow(max(fps, 1) / 30, 0.6) * (hevc ?? self.hevc ? 1 : 1.7)
     }
 }
 
@@ -559,9 +560,6 @@ func encode(
     let sourceFps = videoTrack.nominalFrameRate > 0 ? Double(videoTrack.nominalFrameRate) : 30
     let targetFps = min(settings.fps ?? sourceFps, sourceFps)
     let target = settings.size(width: Int(videoTrack.naturalSize.width), height: Int(videoTrack.naturalSize.height))
-    let bitrate = settings.bitrate(width: target.width, height: target.height, fps: targetFps)
-    let sourceRate = Double(videoTrack.estimatedDataRate)
-    if sourceRate > 0, bitrate > sourceRate * 0.8 { throw ShrinkError.nothingToGain }
 
     let format = videoTrack.formatDescriptions.first.map { $0 as! CMFormatDescription }
     func tag(_ key: CFString) -> String? {
@@ -572,9 +570,8 @@ func encode(
     let matrix = tag(kCMFormatDescriptionExtension_YCbCrMatrix)
     let hdr = transfer == (kCMFormatDescriptionTransferFunction_ITU_R_2100_HLG as String)
         || transfer == (kCMFormatDescriptionTransferFunction_SMPTE_ST_2084_PQ as String)
-    // HDR needs 10-bit HEVC; H.264 would flatten it.
-    let hevc = settings.hevc || hdr
-    // ProRes and 10-bit HEVC originals keep their extra precision whenever the result is HEVC.
+    // ProRes and other 10-bit originals keep their extra precision, as HDR must. H.264 here is 8-bit
+    // only and would flatten them, so these are saved as 10-bit HEVC whatever format was chosen.
     let depth = format.flatMap {
         (CMFormatDescriptionGetExtension($0, extensionKey: kCMFormatDescriptionExtension_BitsPerComponent) as? NSNumber)?.intValue
     }
@@ -582,7 +579,11 @@ func encode(
         kCMVideoCodecType_AppleProRes422, kCMVideoCodecType_AppleProRes422HQ, kCMVideoCodecType_AppleProRes422LT,
         kCMVideoCodecType_AppleProRes422Proxy, kCMVideoCodecType_AppleProRes4444, kCMVideoCodecType_AppleProRes4444XQ,
     ].contains(format.map { CMFormatDescriptionGetMediaSubType($0) } ?? 0)
-    let tenBit = hevc && (hdr || (depth ?? 8) > 8 || proRes)
+    let tenBit = hdr || (depth ?? 8) > 8 || proRes
+    let hevc = settings.hevc || tenBit
+    let bitrate = settings.bitrate(width: target.width, height: target.height, fps: targetFps, hevc: hevc)
+    let sourceRate = Double(videoTrack.estimatedDataRate)
+    if sourceRate > 0, bitrate > sourceRate * 0.8 { throw ShrinkError.nothingToGain }
 
     let reader = try AVAssetReader(asset: asset)
     let pixelFormat = tenBit ? kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange : kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange

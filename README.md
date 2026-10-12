@@ -28,7 +28,8 @@ is uploaded anywhere.
   level. A size estimate updates as you choose. The smaller copy is added to Photos with the original's date,
   location, favorite flag and albums.
 - **HDR stays HDR.** iPhone HDR video is re-encoded as 10-bit HEVC with HDR intact. ProRes and other 10-bit
-  footage keeps its 10 bits. Slo-mo keeps its timing and sound.
+  footage keeps its 10 bits too: it is saved as 10-bit HEVC even if you chose H.264, which would flatten it
+  to 8 bits. Slo-mo keeps its timing and sound.
 - **Delete with a safety net.** Nothing is removed until you approve the standard macOS confirmation, and
   deleted items go to Recently Deleted for 30 days.
 - **Savings page.** A running total of what you have freed, what is still waiting on you, and a log of every

@@ -162,26 +162,51 @@ function render(data) {
   }
 
   const deletedItems = deletes.flatMap((e) => e.items || []);
-  const deletedBytes = deletedItems.reduce((sum, item) => sum + item.bytes, 0);
-  const addedBytes = done.reduce((sum, e) => sum + e.newBytes, 0);
-  const net = deletedBytes - addedBytes;
-  // A shrunk video only saves space once its original is gone; until then the library holds both.
-  const waiting = done.filter((e) => e.originalExists && e.copyExists);
-  const waitingBytes = waiting.reduce((sum, e) => sum + e.originalBytes, 0);
+  const deletedIds = new Set(deletedItems.map((item) => item.id));
+  // Something counts as gone if this app deleted it, or if the measured library no longer has it.
+  const gone = (id, exists) => deletedIds.has(id) || (data.ready && !exists);
 
+  // Each finished shrink lands in one of three places. Its copy replaced the original: that is space
+  // saved by shrinking. Both are still in the library: the copy is extra until the original goes.
+  // The copy itself was deleted: it added nothing, and its original counts as a plain deletion if it went too.
+  const replaced = [], waiting = [], credited = new Set(), copyIds = new Set();
+  for (const e of done) {
+    copyIds.add(e.newId);
+    if (gone(e.newId, e.copyExists)) continue;
+    if (gone(e.assetId, e.originalExists) && !credited.has(e.assetId)) {
+      credited.add(e.assetId);
+      replaced.push(e);
+    } else {
+      waiting.push(e);
+    }
+  }
+  const sum = (list, pick) => list.reduce((total, x) => total + pick(x), 0);
+  const shrunkBefore = sum(replaced, (e) => e.originalBytes), shrunkAfter = sum(replaced, (e) => e.newBytes);
+  const savedByShrinking = shrunkBefore - shrunkAfter;
+  // Everything deleted that wasn't an original replaced by a smaller copy, or a smaller copy itself.
+  const outright = deletedItems.filter((item) => !credited.has(item.id) && !copyIds.has(item.id));
+  const savedByDeleting = sum(outright, (item) => item.bytes);
+  const waitingCopies = sum(waiting, (e) => e.newBytes);
+  const waitingBytes = sum(waiting.filter((e) => e.originalExists), (e) => e.originalBytes);
+  const net = savedByShrinking + savedByDeleting - waitingCopies;
+
+  const parts = [
+    ...(replaced.length ? [`${size(savedByShrinking)} from shrinking ${plural(replaced.length, "video")}`] : []),
+    ...(outright.length ? [`${size(savedByDeleting)} from deleting ${plural(outright.length, "item")} outright`] : []),
+  ];
   const hero = el("div", { className: "hero" }, [
     el("div", { className: "label", textContent: net >= 0 ? "Space saved so far" : "Library has grown by" }),
     el("div", { className: "value", textContent: size(net) }),
     el("div", { className: "note", textContent:
-      `${size(deletedBytes)} deleted, minus ${size(addedBytes)} added as smaller copies. ` +
-      (waiting.length ? `Deleting the ${plural(waiting.length, "original")} that already ${waiting.length === 1 ? "has" : "have"} a smaller copy would save another ${size(waitingBytes)}. ` : "") +
+      (parts.length ? parts.join(", plus ") + ". " : "") +
+      (waiting.length ? `${plural(waiting.length, "smaller copy").replace("copys", "copies")} (${size(waitingCopies)}) ${waiting.length === 1 ? "sits" : "sit"} next to ${waiting.length === 1 ? "its original" : "their originals"} for now; deleting ${waiting.length === 1 ? "that original" : "those originals"} would save another ${size(waitingBytes)}. ` : "") +
       "Deleted items sit in Recently Deleted for 30 days, and iCloud space is freed when they leave it." }),
   ]);
 
   const outcomes = ["done", "failed", "skipped", "cancelled"].map((o) => [o, shrinks.filter((e) => e.outcome === o).length]).filter(([, n]) => n);
   const tiles = el("div", { className: "tiles" }, [
-    tile("Deleted", size(deletedBytes), plural(deletedItems.length, "item") + ` in ${plural(deletes.length, "deletion")}`),
-    tile("Added by shrinking", size(addedBytes), plural(done.length, "smaller copy").replace("copys", "copies")),
+    tile("Saved by shrinking", size(savedByShrinking), replaced.length ? `${plural(replaced.length, "video")}: ${size(shrunkBefore)} → ${size(shrunkAfter)}` : "No originals replaced yet"),
+    tile("Saved by deleting", size(savedByDeleting), outright.length ? plural(outright.length, "item") + " deleted outright" : "Nothing deleted outright"),
     tile("Ready to free", size(waitingBytes), waiting.length ? plural(waiting.length, "original") + " with a smaller copy" : "No originals waiting"),
     tile("Shrink attempts", shrinks.length.toLocaleString(), outcomes.map(([o, n]) => `${n} ${o === "done" ? "completed" : o}`).join(", ") || "None yet"),
   ]);

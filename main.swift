@@ -402,10 +402,22 @@ final class Library {
         guard assets.count > 0 else { return completion(false, "Those items are no longer in the library.") }
         var found: [String] = []
         assets.enumerateObjects { asset, _, _ in found.append(asset.localIdentifier) }
-        DispatchQueue.main.async { NSApp.activate(ignoringOtherApps: true) }
+        // The confirmation is this app's own dialog, so the app has to come forward for it to be seen.
+        // Once it has been answered, hand the screen back to whatever was in front, normally the browser,
+        // rather than leaving this app's little window sitting on top.
+        var previous: NSRunningApplication?
+        DispatchQueue.main.async {
+            previous = NSWorkspace.shared.frontmostApplication
+            NSApp.activate(ignoringOtherApps: true)
+        }
         PHPhotoLibrary.shared().performChanges({
             PHAssetChangeRequest.deleteAssets(assets)
         }) { ok, error in
+            DispatchQueue.main.async {
+                guard let previous = previous, previous != NSRunningApplication.current, !previous.isTerminated else { return }
+                if #available(macOS 14.0, *) { NSApp.yieldActivation(to: previous) }
+                previous.activate(options: [])
+            }
             if ok {
                 self.lock.lock()
                 for id in found { self.noteChange(id, nil) }

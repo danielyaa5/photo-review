@@ -774,6 +774,8 @@ final class Job {
     var newItem: Item?
     var cancelled = false
     var originalDeleted = false
+    /// The smaller copy this job made has since been deleted, so the video counts as not shrunk again.
+    var copyDeleted = false
     /// When the job entered its current state, for the page's elapsed time and estimate.
     var stateSince = Date()
     /// Seconds spent in each state so far.
@@ -816,7 +818,7 @@ final class Job {
         [
             "id": id, "assetId": assetId, "name": name, "state": state, "progress": progress, "message": message,
             "originalBytes": originalBytes, "newBytes": newBytes, "newItem": newItem?.json ?? NSNull(),
-            "item": original.json, "dryRun": dryRun, "settings": settings.json, "originalDeleted": originalDeleted,
+            "item": original.json, "dryRun": dryRun, "settings": settings.json, "originalDeleted": originalDeleted, "copyDeleted": copyDeleted,
             "seconds": Int(Date().timeIntervalSince(stateSince)), "remaining": remainingSeconds ?? NSNull(),
             "deleteOriginal": deleteOriginal, "deletion": deletion,
         ]
@@ -921,20 +923,28 @@ final class Converter {
         }
     }
 
-    /// Catches originals that were deleted somewhere other than this app, so their rows stop offering them.
+    /// Catches originals and smaller copies that were deleted somewhere other than this app, so their
+    /// rows stop offering them.
     func checkOriginals() {
         lock.lock()
-        let waiting = jobs.filter { $0.state == "done" && $0.newItem != nil && !$0.originalDeleted && $0.deletion != "pending" }
-            .map { $0.assetId }
+        var waiting: [String] = []
+        for job in jobs where job.state == "done" && job.newItem != nil {
+            if !job.originalDeleted && job.deletion != "pending" { waiting.append(job.assetId) }
+            if !job.copyDeleted, let copy = job.newItem { waiting.append(copy.id) }
+        }
         lock.unlock()
         let missing = library.forget(missingAmong: waiting)
         if !missing.isEmpty { originalsDeleted(Array(missing)) }
     }
 
-    /// Notes which finished jobs have had their original deleted, so the page stops offering to select it.
+    /// Notes which finished jobs have had their original or their smaller copy deleted, so the page
+    /// stops offering what is no longer there.
     func originalsDeleted(_ ids: [String]) {
         update { jobs in
-            for job in jobs where ids.contains(job.assetId) { job.originalDeleted = true }
+            for job in jobs {
+                if ids.contains(job.assetId) { job.originalDeleted = true }
+                if let copy = job.newItem, ids.contains(copy.id) { job.copyDeleted = true }
+            }
         }
     }
 

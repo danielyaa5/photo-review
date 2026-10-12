@@ -287,6 +287,7 @@ async function load({ offset = 0, limit = PAGE, append = false } = {}) {
   if (!SETTLED.includes(state.status)) poll.timer = setTimeout(poll, 2500);
   state.match = data.matchCount;
   state.items = append ? state.items.concat(data.items) : data.items;
+  dropShrunkPicks();
   renderHeader(data);
   renderGrid();
 }
@@ -402,6 +403,7 @@ function tileWork(job, item) {
     case "encoding": return { text: `Shrinking · ${percent}%`, progress: job.progress, busy: true };
     case "saving": return { text: "Adding the copy to Photos", busy: true };
     case "done":
+      if (job.copyDeleted) return earlier;
       if (!job.newItem || job.originalDeleted) return null;
       // While its deletion is waiting on the macOS confirmation, the original is spoken for.
       return job.deletion === "pending" ? { text: "Smaller copy ready · deleting this original", busy: true } : shrunk(job.newBytes);
@@ -411,6 +413,19 @@ function tileWork(job, item) {
   }
 }
 const isBusy = (id) => Boolean(tileWork(state.work.get(id))?.busy);
+// A video that already has a smaller copy in Photos. All that is left to do with it is delete the
+// original; to shrink it again, delete the smaller copy first.
+function shrunkAlready(item) {
+  const job = state.work.get(item.id);
+  return Boolean(item.copy || (job && job.state === "done" && job.newItem && !job.originalDeleted && !job.copyDeleted));
+}
+// Takes videos that have been shrunk in the meantime out of the Shrink and Both selections.
+function dropShrunkPicks() {
+  const items = new Map(state.items.map((item) => [item.id, item]));
+  for (const pick of ["toShrink", "toBoth"]) {
+    for (const [id, item] of state[pick]) if (shrunkAlready(items.get(id) || item)) state[pick].delete(id);
+  }
+}
 
 // Brings every tile in line with the selections and the shrink queue, without rebuilding the tiles.
 function renderTiles() {
@@ -419,6 +434,7 @@ function renderTiles() {
     const id = card.dataset.id;
     const shrinking = state.toShrink.has(id), doingBoth = state.toBoth.has(id), deleting = state.toDelete.has(id);
     const work = tileWork(state.work.get(id), items.get(id));
+    const shrunk = items.has(id) && shrunkAlready(items.get(id));
     card.classList.toggle("shrinking", shrinking);
     card.classList.toggle("both", doingBoth);
     card.classList.toggle("deleting", deleting);
@@ -429,8 +445,9 @@ function renderTiles() {
       shrink.disabled = Boolean(work?.busy);
       both.textContent = doingBoth ? "✓ Both" : "Both";
       both.disabled = Boolean(work?.busy);
+      shrink.hidden = both.hidden = shrunk;
     }
-    remove.textContent = deleting ? "✓ Delete" : "Delete";
+    remove.textContent = (deleting ? "✓ " : "") + (shrunk ? "Delete original" : "Delete");
     remove.disabled = Boolean(work?.busy);
     const panel = card.querySelector(".work");
     panel.hidden = !work;
@@ -461,7 +478,7 @@ function renderBar() {
 // that is in the shrink queue right now can't be picked at all.
 const PICKS = ["toShrink", "toBoth", "toDelete"];
 function toggle(which, item) {
-  if (isBusy(item.id)) return;
+  if (isBusy(item.id) || (which !== "toDelete" && shrunkAlready(item))) return;
   if (state[which].has(item.id)) state[which].delete(item.id);
   else if (which === "toDelete" || item.video) {
     for (const pick of PICKS) state[pick].delete(item.id);
@@ -503,15 +520,16 @@ function renderViewerBar() {
   $("vsize").textContent = size(item.bytes);
   $("vmeta").textContent = ` · ${item.date || "No date"} · ${item.name}${item.video ? " · " + duration(item.dur) : ""}${place}${item.copy ? ` · already shrunk to ${size(item.copy.bytes)}, original not deleted` : ""}`;
   const busy = isBusy(item.id);
-  $("vshrink").hidden = !item.video;
+  const shrunk = shrunkAlready(item);
+  $("vshrink").hidden = !item.video || shrunk;
   $("vshrink").textContent = state.toShrink.has(item.id) ? "✓ Shrink" : "Shrink";
   $("vshrink").className = state.toShrink.has(item.id) ? "primary" : "";
   $("vshrink").disabled = busy;
-  $("vboth").hidden = !item.video;
+  $("vboth").hidden = !item.video || shrunk;
   $("vboth").textContent = state.toBoth.has(item.id) ? "✓ Both" : "Both";
   $("vboth").className = state.toBoth.has(item.id) ? "primary" : "";
   $("vboth").disabled = busy;
-  $("vdelete").textContent = state.toDelete.has(item.id) ? "✓ Delete" : "Delete";
+  $("vdelete").textContent = (state.toDelete.has(item.id) ? "✓ " : "") + (shrunk ? "Delete original" : "Delete");
   $("vdelete").className = state.toDelete.has(item.id) ? "danger" : "";
   $("vdelete").disabled = busy;
   $("vprev").disabled = state.current <= 0;
@@ -667,6 +685,7 @@ function jobStatus(job) {
     case "done": {
       const saved = `${size(job.originalBytes)} → ${size(job.newBytes)}, saves ${Math.round(100 * (1 - job.newBytes / job.originalBytes))}%.`;
       if (!job.newItem) return saved + " Test run: nothing was added to Photos.";
+      if (job.copyDeleted) return saved + " The smaller copy has since been deleted.";
       if (job.originalDeleted) return saved + " Original deleted.";
       if (job.deletion === "pending") return saved + " The original will be deleted when the queue finishes; macOS will ask you to confirm.";
       if (job.deletion === "kept") return saved + " Original kept: " + (job.message || "the deletion wasn't confirmed.");
@@ -702,7 +721,7 @@ function renderJobs(jobs) {
     row.bar.style.width = Math.round(job.progress * 100) + "%";
     const retry = job.state === "failed" || job.state === "cancelled";
     row.action.textContent = active ? "Cancel" : retry ? "Try again" : "View new copy";
-    row.action.hidden = !active && !retry && !job.newItem;
+    row.action.hidden = !active && !retry && (!job.newItem || job.copyDeleted);
     row.action.onclick = active ? async () => { await post("/api/jobs/cancel", { id: job.id }); pollJobs(); }
       : retry ? async () => {
         const result = await post("/api/shrink", { ids: [job.assetId], ...job.settings, deleteOriginal: job.deleteOriginal });
@@ -711,7 +730,7 @@ function renderJobs(jobs) {
       }
       : () => view(-1, job.newItem);
     // Lets the original be picked for deletion even if this page was reloaded while the job ran.
-    row.pick.hidden = !job.newItem || job.originalDeleted || job.deletion === "pending";
+    row.pick.hidden = !job.newItem || job.originalDeleted || job.copyDeleted || job.deletion === "pending";
     row.reveal.hidden = job.originalDeleted;
     row.pick.textContent = state.toDelete.has(job.assetId) ? "✓ Delete original" : "Delete original";
     row.pick.onclick = () => { toggle("toDelete", job.item); renderJobs(jobs); };
@@ -741,6 +760,13 @@ async function pollJobs() {
       state.toDelete.delete(job.assetId);
       removed++;
     }
+    // The same goes for a smaller copy that has been deleted: its tile goes, and the original's is plain again.
+    // Its original must not stay marked for deletion, or deleting it would leave no copy at all.
+    if (job.copyDeleted && !state.gone.has(job.id + ":copy")) {
+      state.gone.add(job.id + ":copy");
+      state.toDelete.delete(job.assetId);
+      removed++;
+    }
     state.jobs.set(job.id, job.state);
   }
   state.downloading = jobs.some((job) => job.state === "downloading");
@@ -749,6 +775,7 @@ async function pollJobs() {
   for (const id of state.work.keys()) {
     if (isBusy(id)) for (const pick of PICKS) state[pick].delete(id);
   }
+  dropShrunkPicks();
   renderJobs(jobs);
   renderTiles();
   renderBar();

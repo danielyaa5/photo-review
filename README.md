@@ -21,8 +21,9 @@ is uploaded anywhere.
   Photo video. Filter by type or year.
 - **Preview before deciding.** Thumbnails for everything, and in-page playback for videos, including ones
   that are only in iCloud.
-- **Two separate picks.** Each item has its own Shrink and Delete buttons, so you can line up some videos to
-  shrink and other things to delete in one pass. A video in the queue shows its progress on its tile.
+- **Three separate picks.** Each video has Shrink, Both and Delete buttons, so you can line up some videos to
+  shrink and other things to delete in one pass. Both means shrink it, then delete the original once the
+  smaller copy is in Photos. A video in the queue shows its progress on its tile.
 - **Shrink videos.** Pick a resolution cap (4K, 1080p, 720p), a frame-rate cap, HEVC or H.264, and a quality
   level. A size estimate updates as you choose. The smaller copy is added to Photos with the original's date,
   location, favorite flag and albums.
@@ -49,9 +50,10 @@ Photos has no way to swap a video's file in place, so a shrink is three steps:
 2. It is re-encoded on your Mac with Apple's hardware encoder.
 3. The smaller copy is added to Photos as a new item, named like `IMG_1234 (shrunk).mov`.
 
-The original is left alone. When you have checked the new copy, you delete the original yourself. Or tick
-"Delete each original" when starting a batch: once the whole queue has finished, the app asks Photos to delete
-the originals of the videos that shrank successfully, and macOS asks you to confirm once. If a re-encode
+The original is left alone. When you have checked the new copy, you delete the original yourself. Or pick a
+video with Both instead of Shrink, or tick "Delete each original" when starting a batch: once the whole queue
+has finished, the app asks Photos to delete the originals of those videos that shrank successfully, and macOS
+asks you to confirm once. If a re-encode
 would not save a meaningful amount, the video is skipped instead.
 
 As an example, a 43-second 4K HDR iPhone clip went from 482 MB to 27 MB at 1080p, 30 fps, medium quality.

@@ -803,13 +803,15 @@ final class Converter {
         self.history = history
     }
 
-    func enqueue(ids: [String], settings: ShrinkSettings, dryRun: Bool, deleteOriginal: Bool) -> Int {
+    /// `deleteOriginal` applies to every video in the request; `deleteOriginalIds` names the ones picked
+    /// for it one by one. Either is enough for a video's original to be deleted after its shrink.
+    func enqueue(ids: [String], settings: ShrinkSettings, dryRun: Bool, deleteOriginal: Bool, deleteOriginalIds: Set<String> = []) -> Int {
         var added = 0
         for id in ids {
             guard let item = library.item(id), item.isVideo else { continue }
             lock.lock()
             let busy = jobs.contains { $0.assetId == id && $0.isActive }
-            let job = Job(id: nextId, item: item, settings: settings, dryRun: dryRun, deleteOriginal: deleteOriginal)
+            let job = Job(id: nextId, item: item, settings: settings, dryRun: dryRun, deleteOriginal: deleteOriginal || deleteOriginalIds.contains(id))
             if !busy {
                 // A fresh attempt replaces the rows left by earlier ones that didn't finish.
                 jobs.removeAll { $0.assetId == id && ["failed", "cancelled", "skipped"].contains($0.state) }
@@ -1261,7 +1263,8 @@ final class Server {
             let payload = (try? JSONSerialization.jsonObject(with: request.body)) as? [String: Any] ?? [:]
             let started = converter.enqueue(
                 ids: payload["ids"] as? [String] ?? [], settings: ShrinkSettings(payload),
-                dryRun: payload["dryRun"] as? Bool ?? false, deleteOriginal: payload["deleteOriginal"] as? Bool ?? false)
+                dryRun: payload["dryRun"] as? Bool ?? false, deleteOriginal: payload["deleteOriginal"] as? Bool ?? false,
+                deleteOriginalIds: Set(payload["deleteOriginalIds"] as? [String] ?? []))
             sendJSON(connection, ["ok": started > 0, "started": started, "error": started > 0 ? "" : "No videos to shrink."])
         case ("GET", "/api/jobs"):
             sendJSON(connection, ["jobs": converter.list()])

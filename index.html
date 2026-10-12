@@ -48,6 +48,7 @@
   #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
   .card.shrinking { outline: 3px solid var(--accent); outline-offset: -1px; }
+  .card.both { outline: 3px solid var(--accent); outline-offset: -1px; }
   .card.deleting { outline: 3px solid var(--danger); outline-offset: -1px; }
   .thumb { position: relative; aspect-ratio: 4 / 3; background: #000; cursor: zoom-in; }
   .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -56,8 +57,9 @@
   .size { font-size: 16px; font-weight: 650; }
   .meta { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .actions { display: flex; gap: 6px; margin-top: 8px; }
-  .actions button { flex: 1; padding: 5px 6px; font-size: 13px; }
+  .actions button { flex: 1; padding: 5px 4px; font-size: 13px; white-space: nowrap; }
   .card.shrinking .pickshrink { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .card.both .pickboth { background: var(--accent); border-color: var(--accent); color: #fff; }
   .card.deleting .pickdelete { background: var(--danger); border-color: var(--danger); color: #fff; }
   .card .reveal { display: block; width: 100%; margin-top: 6px; border: 0; background: none; padding: 2px 0; color: var(--accent); font-size: 12px; text-align: left; }
   /* What is happening to this video in the shrink queue, shown on its picture. */
@@ -101,6 +103,7 @@
   #spreview .name { overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
   #spreview .skip { color: var(--muted); }
   #shrink #sestimate { color: var(--fg); font-size: 14px; margin-top: 14px; }
+  #shrink #sboth { color: var(--fg); margin: 12px 0 4px; }
   #shrink .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 
   #viewer { position: fixed; inset: 0; background: rgba(0, 0, 0, .92); display: none; flex-direction: column; z-index: 10; }
@@ -131,7 +134,7 @@
     #spreview .line { flex-direction: column; gap: 0; white-space: normal; }
     #viewbar { padding: 10px 14px; gap: 8px; }
     #viewbar .title { flex: 1 1 100%; overflow-wrap: anywhere; }
-    #viewbar button { flex: 1; padding: 6px 8px; }
+    #viewbar button { flex: 1; padding: 6px 8px; white-space: nowrap; }
     #viewbar .keys { display: none; }
   }
 </style>
@@ -173,7 +176,7 @@
 <div id="shrink">
   <div class="dialog" role="dialog" aria-labelledby="stitle">
     <h2 id="stitle">Shrink videos</h2>
-    <p>Each video is downloaded from iCloud at full quality, re-encoded on this Mac, and added to Photos as a new item with the same date, location, favorite and albums. The original stays until you delete it, unless you tick the box below.</p>
+    <p>Each video is downloaded from iCloud at full quality, re-encoded on this Mac, and added to Photos as a new item with the same date, location, favorite and albums. The original stays until you delete it, unless you picked Both for it or tick the box below.</p>
     <label>Resolution <select id="sres">
       <option value="keep">Keep original</option><option value="2160">4K at most</option>
       <option value="1080">1080p at most</option><option value="720">720p at most</option></select></label>
@@ -185,7 +188,8 @@
       <option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
     <div id="spreview"></div>
     <p id="sestimate"></p>
-    <label class="check"><input type="checkbox" id="sdelete"> Delete each original once its smaller copy is in Photos</label>
+    <p id="sboth" hidden></p>
+    <label class="check" id="sdeleterow"><input type="checkbox" id="sdelete"> <span id="sdeletetext"></span></label>
     <p>macOS asks you to confirm once, when the whole queue has finished. Deleted originals stay in Recently Deleted for 30 days.</p>
     <p>HDR videos stay HDR and are always saved as HEVC. Edits are baked in, and captions, keywords and people tags don't carry over.</p>
     <div class="row"><button id="scancel">Cancel</button><button id="sstart" class="primary">Start</button></div>
@@ -201,19 +205,21 @@
     <button id="vnext">Next →</button>
     <button id="vreveal">Open in Photos</button>
     <button id="vshrink"></button>
+    <button id="vboth" title="Shrink, then delete the original"></button>
     <button id="vdelete"></button>
     <button id="vclose">Close</button>
-    <div class="keys">← → to move · S to mark for shrinking · X to mark for deleting · Esc to close</div>
+    <div class="keys">← → to move · S to shrink · B for both (shrink, then delete the original) · X to delete · Esc to close</div>
   </div>
 </div>
 
 <script>
 const TOKEN = "__TOKEN__";
 const PAGE = 60;
-// `toShrink` and `toDelete` are the two selections (id -> item), and an item is in at most one of them.
+// `toShrink`, `toBoth` and `toDelete` are the selections (id -> item), and an item is in at most one of them.
+// "Both" means shrink the video, then delete its original once the smaller copy is in Photos.
 // `work` is the latest shrink job for each video (asset id -> job).
 // `viewing` is the item open in the viewer, `current` its index in the list or -1.
-const state = { items: [], toShrink: new Map(), toDelete: new Map(), work: new Map(), kind: "all", year: "", match: 0, status: "starting", current: -1, viewing: null, busy: false, jobs: new Map(), gone: new Set(), downloading: false, offline: false, measuredAt: null, updating: "" };
+const state = { items: [], toShrink: new Map(), toBoth: new Map(), toDelete: new Map(), work: new Map(), kind: "all", year: "", match: 0, status: "starting", current: -1, viewing: null, busy: false, jobs: new Map(), gone: new Set(), downloading: false, offline: false, measuredAt: null, updating: "" };
 const $ = (id) => document.getElementById(id);
 
 function size(bytes) {
@@ -343,6 +349,8 @@ function renderGrid() {
     $("grid").replaceChildren(...state.items.map((item, index) => {
       const shrink = el("button", { className: "pickshrink" });
       shrink.onclick = () => toggle("toShrink", item);
+      const both = el("button", { className: "pickboth", title: "Shrink, then delete the original" });
+      both.onclick = () => toggle("toBoth", item);
       const remove = el("button", { className: "pickdelete" });
       remove.onclick = () => toggle("toDelete", item);
       const reveal = el("button", { className: "reveal", textContent: "Open in Photos" });
@@ -368,7 +376,7 @@ function renderGrid() {
           el("div", { className: "meta", textContent: details, title: details }),
           el("div", { className: "meta", textContent: item.name, title: item.name }),
           // Only videos can be shrunk; photos just get Delete.
-          el("div", { className: "actions" }, item.video ? [shrink, remove] : [remove]),
+          el("div", { className: "actions" }, item.video ? [shrink, both, remove] : [remove]),
           reveal,
         ]),
       ]);
@@ -405,15 +413,18 @@ const isBusy = (id) => Boolean(tileWork(state.work.get(id))?.busy);
 function renderTiles() {
   for (const card of $("grid").children) {
     const id = card.dataset.id;
-    const shrinking = state.toShrink.has(id), deleting = state.toDelete.has(id);
+    const shrinking = state.toShrink.has(id), doingBoth = state.toBoth.has(id), deleting = state.toDelete.has(id);
     const work = tileWork(state.work.get(id));
     card.classList.toggle("shrinking", shrinking);
+    card.classList.toggle("both", doingBoth);
     card.classList.toggle("deleting", deleting);
     card.classList.toggle("working", Boolean(work));
-    const shrink = card.querySelector(".pickshrink"), remove = card.querySelector(".pickdelete");
+    const shrink = card.querySelector(".pickshrink"), both = card.querySelector(".pickboth"), remove = card.querySelector(".pickdelete");
     if (shrink) {
       shrink.textContent = shrinking ? "✓ Shrink" : "Shrink";
       shrink.disabled = Boolean(work?.busy);
+      both.textContent = doingBoth ? "✓ Both" : "Both";
+      both.disabled = Boolean(work?.busy);
     }
     remove.textContent = deleting ? "✓ Delete" : "Delete";
     remove.disabled = Boolean(work?.busy);
@@ -429,11 +440,11 @@ function renderTiles() {
 
 function renderBar() {
   const total = (map) => [...map.values()].reduce((sum, item) => sum + item.bytes, 0);
-  const shrinks = state.toShrink.size, deletes = state.toDelete.size;
+  const both = state.toBoth.size, shrinks = state.toShrink.size + both, deletes = state.toDelete.size;
   $("bar").classList.toggle("on", shrinks + deletes > 0);
   $("gshrink").hidden = shrinks === 0;
   $("gdelete").hidden = deletes === 0;
-  $("shrinkcount").textContent = `${shrinks} to shrink · ${size(total(state.toShrink))}`;
+  $("shrinkcount").textContent = `${shrinks} to shrink${both ? `, ${both} then delete` : ""} · ${size(total(state.toShrink) + total(state.toBoth))}`;
   $("deletecount").textContent = `${deletes} to delete · ${size(total(state.toDelete))}`;
   $("shrinkopen").textContent = `Shrink ${shrinks} video${shrinks === 1 ? "" : "s"}…`;
   $("delete").textContent = state.busy ? "Confirm in the Photo Review dialog…" : `Delete ${deletes} item${deletes === 1 ? "" : "s"}…`;
@@ -442,15 +453,15 @@ function renderBar() {
   document.querySelector("#bar .hint").hidden = deletes === 0;
 }
 
-// Adds an item to one selection or takes it out. An item can't be in both, and a video that is
-// in the shrink queue right now can't be picked for either.
+// Adds an item to one selection or takes it out. An item is in one selection at most, and a video
+// that is in the shrink queue right now can't be picked at all.
+const PICKS = ["toShrink", "toBoth", "toDelete"];
 function toggle(which, item) {
   if (isBusy(item.id)) return;
-  const other = which === "toShrink" ? "toDelete" : "toShrink";
   if (state[which].has(item.id)) state[which].delete(item.id);
   else if (which === "toDelete" || item.video) {
+    for (const pick of PICKS) state[pick].delete(item.id);
     state[which].set(item.id, item);
-    state[other].delete(item.id);
   }
   renderGrid();
   if (state.viewing) renderViewerBar();
@@ -492,6 +503,10 @@ function renderViewerBar() {
   $("vshrink").textContent = state.toShrink.has(item.id) ? "✓ Shrink" : "Shrink";
   $("vshrink").className = state.toShrink.has(item.id) ? "primary" : "";
   $("vshrink").disabled = busy;
+  $("vboth").hidden = !item.video;
+  $("vboth").textContent = state.toBoth.has(item.id) ? "✓ Both" : "Both";
+  $("vboth").className = state.toBoth.has(item.id) ? "primary" : "";
+  $("vboth").disabled = busy;
   $("vdelete").textContent = state.toDelete.has(item.id) ? "✓ Delete" : "Delete";
   $("vdelete").className = state.toDelete.has(item.id) ? "danger" : "";
   $("vdelete").disabled = busy;
@@ -521,7 +536,7 @@ $("kinds").onclick = (event) => {
 };
 $("year").onchange = () => { state.year = $("year").value; load(); };
 $("more").onclick = () => load({ offset: state.items.length, append: true });
-$("clear").onclick = () => { state.toShrink.clear(); state.toDelete.clear(); renderGrid(); pollJobs(); };
+$("clear").onclick = () => { for (const pick of PICKS) state[pick].clear(); renderGrid(); pollJobs(); };
 $("delete").onclick = async () => {
   const doomed = [...state.toDelete.values()];
   const bytes = doomed.reduce((sum, item) => sum + item.bytes, 0);
@@ -542,6 +557,7 @@ $("vprev").onclick = () => step(-1);
 $("vnext").onclick = () => step(1);
 $("vclose").onclick = closeViewer;
 $("vshrink").onclick = () => toggle("toShrink", state.viewing);
+$("vboth").onclick = () => toggle("toBoth", state.viewing);
 $("vdelete").onclick = () => toggle("toDelete", state.viewing);
 $("vreveal").onclick = () => openInPhotos(state.viewing);
 $("stage").onclick = (event) => { if (event.target === $("stage")) closeViewer(); };
@@ -553,10 +569,11 @@ document.addEventListener("keydown", (event) => {
   else if (event.key === "ArrowRight") step(1);
   else if (event.key.toLowerCase() === "x") toggle("toDelete", state.viewing);
   else if (event.key.toLowerCase() === "s") toggle("toShrink", state.viewing);
+  else if (event.key.toLowerCase() === "b") toggle("toBoth", state.viewing);
 });
 
 // Shrinking
-const selectedVideos = () => [...state.toShrink.values()];
+const selectedVideos = () => [...state.toShrink.values(), ...state.toBoth.values()];
 const shrinkOptions = () => ({ resolution: $("sres").value, fps: $("sfps").value, codec: $("scodec").value, quality: $("squality").value });
 
 // Mirrors ShrinkSettings.bitrate in main.swift, plus a small allowance for audio. The original frame rate
@@ -580,6 +597,14 @@ function range(low, high) {
 }
 function renderEstimate() {
   const videos = selectedVideos(), options = shrinkOptions();
+  // Videos picked with Both lose their original either way; the tick box decides for the rest.
+  const both = state.toBoth.size, plain = state.toShrink.size;
+  $("sboth").hidden = both === 0;
+  $("sboth").textContent = `The ${both === 1 ? "video" : `${both} videos`} picked with Both will have ${both === 1 ? "its original" : "their originals"} deleted once the smaller cop${both === 1 ? "y is" : "ies are"} in Photos.`;
+  $("sdeleterow").hidden = plain === 0;
+  $("sdeletetext").textContent = both === 0 ? "Delete each original once its smaller copy is in Photos"
+    : `Delete the original${plain === 1 ? "" : "s"} of the other ${plain === 1 ? "video" : plain + " videos"} as well`;
+  const doomed = (item) => state.toBoth.has(item.id) || $("sdelete").checked;
   let before = 0, low = 0, high = 0, skipped = 0;
   $("spreview").replaceChildren(...videos.map((item) => {
     const guess = preview(item, options);
@@ -591,7 +616,7 @@ function renderEstimate() {
     const unsure = guess && options.fps === "keep" && estimate(item, options, 60) > item.bytes * 0.8;
     return el("div", { className: "line" + (guess ? "" : " skip") }, [
       el("span", { className: "name", textContent: item.name, title: item.name }),
-      el("span", { textContent: !guess ? `${size(item.bytes)}, already this small` : `${size(item.bytes)} → ${range(guess.low, guess.high)}${unsure ? " (may be skipped)" : ""}` }),
+      el("span", { textContent: !guess ? `${size(item.bytes)}, already this small` : `${size(item.bytes)} → ${range(guess.low, guess.high)}${unsure ? " (may be skipped)" : ""}${doomed(item) ? " · original deleted" : ""}` }),
     ]);
   }));
   $("stitle").textContent = `Shrink ${videos.length} video${videos.length === 1 ? "" : "s"}`;
@@ -603,14 +628,17 @@ function renderEstimate() {
 }
 $("shrinkopen").onclick = () => { renderEstimate(); $("shrink").classList.add("on"); };
 $("scancel").onclick = () => $("shrink").classList.remove("on");
-for (const id of ["sres", "sfps", "scodec", "squality"]) $(id).onchange = renderEstimate;
+for (const id of ["sres", "sfps", "scodec", "squality", "sdelete"]) $(id).onchange = renderEstimate;
 $("sstart").onclick = async () => {
   const videos = selectedVideos();
-  const result = await post("/api/shrink", { ids: videos.map((item) => item.id), ...shrinkOptions(), deleteOriginal: $("sdelete").checked });
+  const result = await post("/api/shrink", {
+    ids: videos.map((item) => item.id), ...shrinkOptions(),
+    deleteOriginal: $("sdelete").checked && state.toShrink.size > 0, deleteOriginalIds: [...state.toBoth.keys()],
+  });
   $("shrink").classList.remove("on");
   if (!result.ok) return toast(result.error);
   // From here their tiles show progress; originals are marked for deletion as their copies arrive.
-  for (const item of videos) state.toShrink.delete(item.id);
+  for (const item of videos) { state.toShrink.delete(item.id); state.toBoth.delete(item.id); }
   await pollJobs();
   renderGrid();
 };
@@ -715,7 +743,7 @@ async function pollJobs() {
   // Later jobs for the same video replace earlier ones, so a retry shows the retry.
   state.work = new Map(jobs.map((job) => [job.assetId, job]));
   for (const id of state.work.keys()) {
-    if (isBusy(id)) { state.toShrink.delete(id); state.toDelete.delete(id); }
+    if (isBusy(id)) for (const pick of PICKS) state[pick].delete(id);
   }
   renderJobs(jobs);
   renderTiles();

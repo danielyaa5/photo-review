@@ -33,8 +33,8 @@ is uploaded anywhere.
   to 8 bits. Slo-mo keeps its timing and sound.
 - **Delete with a safety net.** Nothing is removed until you approve the standard macOS confirmation, and
   deleted items go to Recently Deleted for 30 days.
-- **Savings page.** A running total of what you have freed, what is still waiting on you, and a log of every
-  shrink attempt and deletion.
+- **Savings page.** A running total of what you have freed, split into what shrinking saved and what deleting
+  saved, plus what is still waiting on you and a log of every shrink attempt and deletion.
 - **Quick to reopen.** Measuring a large library takes a minute or more, so the result is kept for a day.
   The page says when it was measured, and "Update now" measures again.
 
@@ -52,11 +52,12 @@ Photos has no way to swap a video's file in place, so a shrink is three steps:
 2. It is re-encoded on your Mac with Apple's hardware encoder.
 3. The smaller copy is added to Photos as a new item, named like `IMG_1234 (shrunk).mov`.
 
-The original is left alone. When you have checked the new copy, you delete the original yourself. Or pick a
-video with Both instead of Shrink, or tick "Delete each original" when starting a batch: once the whole queue
-has finished, the app asks Photos to delete the originals of those videos that shrank successfully, and macOS
-asks you to confirm once. If a re-encode
-would not save a meaningful amount, the video is skipped instead.
+The original is left alone. Its tile then says it has been shrunk and offers only Delete original, so once
+you have checked the new copy you delete the original yourself. Or pick a video with Both instead of Shrink,
+or tick "Delete each original" when starting a batch: once the whole queue has finished, the app asks Photos
+to delete the originals of those videos that shrank successfully, and macOS asks you to confirm once. To
+shrink a video again with different settings, delete its smaller copy first. If a re-encode would not save a
+meaningful amount, the video is skipped instead.
 
 As an example, a 43-second 4K HDR iPhone clip went from 482 MB to 27 MB at 1080p, 30 fps, medium quality.
 Savings are largest on ProRes and high-bitrate action-camera footage.
@@ -105,8 +106,9 @@ for Photos access separately for each.
 - **Dolby Vision.** The copy keeps the HDR picture. Whether the iPhone's extra Dolby Vision metadata survives
   has not been checked; if it doesn't, the video still plays as HDR.
 - **iCloud space is freed later.** Deleted items count against your storage until they leave Recently Deleted.
-- **Changes made elsewhere** (new photos, deletions in the Photos app) don't show up until the library is
-  measured again: once a day, or when you click "Update now".
+- **Changes made elsewhere.** Items deleted in the Photos app or on another device drop out of the list as
+  soon as it is shown again. New photos and videos don't appear until the library is measured again: once a
+  day, or when you click "Update now".
 
 ## How it is built
 

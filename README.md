@@ -78,6 +78,8 @@ since it needs to read sizes, add shrunk copies and delete what you select. Your
 videos shown first; after that the app opens straight away for the rest of the day.
 
 Keep the small Photo Review window open while you work. Closing it quits the app.
+Before a large batch, read [Managing the size of your Photos library](#managing-the-size-of-your-photos-library)
+and leave room for the originals to download.
 
 ### Building it yourself
 
@@ -93,6 +95,39 @@ open "Photo Review.app"
 A local build is signed for your Mac only and uses a different app identity from the release, so macOS asks
 for Photos access separately for each.
 
+## Managing the size of your Photos library
+
+**Your Mac's Photos library can grow while you shrink videos.** Photos downloads full-quality originals
+from iCloud, and the smaller copies are added alongside them. Photo Review removes its own temporary
+conversion files, but Photos controls how long downloaded originals stay on disk. The Savings page tracks
+changes to the items in your library; it does not measure free disk space on your Mac.
+
+In **Photos → Settings → iCloud**, select **Optimize Mac Storage** if you use iCloud Photos. Photos can
+keep smaller local versions when space is limited, but this does not immediately clear recent downloads.
+Work in smaller batches if disk space is tight: downloads from a long queue can accumulate, and **Both**
+or **Delete each original** asks for deletion only after the whole queue finishes.
+
+To reclaim space after a batch:
+
+1. Play each smaller copy in Photos and check its picture, sound and full length. Confirm it has uploaded
+   to iCloud, and keep a separate backup of the original if you may want its full quality later.
+2. Delete the replaced originals using **Delete original** in Photo Review, or approve the batch's
+   deletion request if you used **Both** or **Delete each original**. They move to Recently Deleted.
+3. To remove those originals sooner than the usual 30 days, open **Recently Deleted** in Photos on your
+   Mac, or sign in to [iCloud Photos](https://www.icloud.com/photos) and open **Recently Deleted** there.
+   Select only the originals you have checked and replaced, then choose **Delete** and confirm. Avoid
+   **Delete All** unless you intend to permanently remove every item in that album.
+4. Give Photos time to sync and clean up. Removing replaced originals from Recently Deleted can
+   substantially reduce the local library size, but the space may not return immediately.
+
+**Permanent deletion removes the originals from iCloud and every device using iCloud Photos, and ends
+the 30-day recovery option.** The smaller copies remain as separate items. Photo Review does not empty
+Recently Deleted for you. If you keep an original in the main library, Photos still decides when to clear
+its local download.
+
+See Apple's guidance on [Optimize Mac Storage](https://support.apple.com/en-us/guide/photos/phta9b4673b4/mac)
+and [deleting and recovering items on iCloud.com](https://support.apple.com/guide/icloud/mm08b49040b5/icloud).
+
 ## Things to know before you rely on it
 
 - **It is new.** It has been built and tested on one Mac (Apple silicon, macOS 27) against one large library.
@@ -100,12 +135,14 @@ for Photos access separately for each.
 - **Downloads are the slow part.** Photos fetches one original at a time, so a 25 GB video can take over an
   hour before encoding starts. Dropped connections are retried, and Photos has resumed where it left off.
 - **Originals stay on disk for a while.** A downloaded original remains on your Mac until Photos clears it,
-  so a long queue needs free disk space. The app refuses to start a download it has no room for.
+  so a long queue needs free disk space. The app refuses to start a download it has no room for. See
+  [Managing the size of your Photos library](#managing-the-size-of-your-photos-library) for cleanup steps.
 - **Some things don't carry over to a shrunk copy:** edits are baked in rather than kept as edits, and
   captions, keywords, people tags and shared-album membership are lost.
 - **Dolby Vision.** The copy keeps the HDR picture. Whether the iPhone's extra Dolby Vision metadata survives
   has not been checked; if it doesn't, the video still plays as HDR.
-- **iCloud space is freed later.** Deleted items count against your storage until they leave Recently Deleted.
+- **Deletion has a recovery period.** Deleted items remain in Recently Deleted for 30 days unless you
+  permanently delete them sooner. Photos may need time to sync and reclaim local storage.
 - **Changes made elsewhere.** Items deleted in the Photos app or on another device drop out of the list as
   soon as it is shown again. New photos and videos don't appear until the library is measured again: once a
   day, or when you click "Update now".

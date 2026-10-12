@@ -94,6 +94,7 @@
   #shrink .dialog { background: var(--card); border-radius: 12px; padding: 20px 22px; width: 100%; max-width: 520px; max-height: 100%; overflow: auto; }
   #shrink h2 { margin: 0 0 6px; font-size: 18px; }
   #shrink p { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+  #shrink a { color: var(--accent); }
   #shrink label { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0; }
   #shrink select { width: 230px; }
   #shrink label.check { justify-content: flex-start; gap: 8px; margin: 12px 0 4px; color: var(--fg); }
@@ -177,6 +178,7 @@
   <div class="dialog" role="dialog" aria-labelledby="stitle">
     <h2 id="stitle">Shrink videos</h2>
     <p>Each video is downloaded from iCloud at full quality, re-encoded on this Mac, and added to Photos as a new item with the same date, location, favorite and albums. The original stays until you delete it, unless you picked Both for it or tick the box below.</p>
+    <p><b>Leave room on your Mac:</b> downloaded originals can grow the Photos library. Use Optimize Mac Storage in Photos' iCloud settings and smaller batches if space is tight. After checking the smaller copies and their iCloud upload, you can permanently remove only their replaced originals from Recently Deleted. This deletes those originals across your iCloud Photos devices and ends recovery. <a href="https://danielyaa5.github.io/photo-review/#storage" target="_blank" rel="noopener noreferrer">Photos storage guide</a></p>
     <label>Resolution <select id="sres">
       <option value="keep">Keep original</option><option value="2160">4K at most</option>
       <option value="1080">1080p at most</option><option value="720">720p at most</option></select></label>

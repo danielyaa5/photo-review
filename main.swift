@@ -289,6 +289,28 @@ final class Library {
         PHAsset.fetchAssets(withLocalIdentifiers: [id], options: nil).firstObject
     }
 
+    /// Drops any of these items that Photos no longer has, such as ones deleted in the Photos app itself
+    /// or on another device, and returns their ids.
+    @discardableResult
+    func forget(missingAmong ids: [String]) -> Set<String> {
+        guard !ids.isEmpty, PHPhotoLibrary.authorizationStatus(for: .readWrite) == .authorized else { return [] }
+        var present = Set<String>()
+        PHAsset.fetchAssets(withLocalIdentifiers: ids, options: nil).enumerateObjects { asset, _, _ in
+            present.insert(asset.localIdentifier)
+        }
+        let missing = Set(ids).subtracting(present)
+        guard !missing.isEmpty else { return [] }
+        // If Photos has nothing at all to show, the library is unavailable, not emptied: forget nothing.
+        let probe = PHFetchOptions()
+        probe.fetchLimit = 1
+        guard PHAsset.fetchAssets(with: probe).count > 0 else { return [] }
+        lock.lock()
+        for id in missing where items[id] != nil { noteChange(id, nil) }
+        lock.unlock()
+        saveCacheSoon()
+        return missing
+    }
+
     /// True once there is a complete list to work from, including while it is being re-measured.
     var isReady: Bool {
         lock.lock()
@@ -899,6 +921,16 @@ final class Converter {
         }
     }
 
+    /// Catches originals that were deleted somewhere other than this app, so their rows stop offering them.
+    func checkOriginals() {
+        lock.lock()
+        let waiting = jobs.filter { $0.state == "done" && $0.newItem != nil && !$0.originalDeleted && $0.deletion != "pending" }
+            .map { $0.assetId }
+        lock.unlock()
+        let missing = library.forget(missingAmong: waiting)
+        if !missing.isEmpty { originalsDeleted(Array(missing)) }
+    }
+
     /// Notes which finished jobs have had their original deleted, so the page stops offering to select it.
     func originalsDeleted(_ ids: [String]) {
         update { jobs in
@@ -1250,9 +1282,17 @@ final class Server {
             }
             sendJSON(connection, ["ready": library.isReady, "events": events])
         case ("GET", "/api/items"):
-            var result = library.query(
-                kind: request.query["kind"] ?? "all", year: Int(request.query["year"] ?? ""),
-                offset: Int(request.query["offset"] ?? "") ?? 0, limit: min(Int(request.query["limit"] ?? "") ?? 60, 2000))
+            let query = {
+                self.library.query(
+                    kind: request.query["kind"] ?? "all", year: Int(request.query["year"] ?? ""),
+                    offset: Int(request.query["offset"] ?? "") ?? 0, limit: min(Int(request.query["limit"] ?? "") ?? 60, 2000))
+            }
+            var result = query()
+            // Anything on this page that has since been deleted in Photos itself is dropped before it is shown.
+            if library.isReady, let items = result["items"] as? [[String: Any]] {
+                let shown = items.prefix(500).compactMap { $0["id"] as? String }
+                if !library.forget(missingAmong: shown).isEmpty { result = query() }
+            }
             // A video whose smaller copy is in Photos while the original is still here carries that copy
             // along. This comes from the history file, so its tile can say so after the app is restarted.
             let copies = history.copies()
@@ -1292,6 +1332,7 @@ final class Server {
                 deleteOriginalIds: Set(payload["deleteOriginalIds"] as? [String] ?? []))
             sendJSON(connection, ["ok": started > 0, "started": started, "error": started > 0 ? "" : "No videos to shrink."])
         case ("GET", "/api/jobs"):
+            converter.checkOriginals()
             sendJSON(connection, ["jobs": converter.list()])
         case ("POST", "/api/update"):
             sendJSON(connection, ["ok": library.update()])

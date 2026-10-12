@@ -778,6 +778,10 @@ $("update").onclick = async () => {
   if (!result.ok && result.error) toast(result.error);
   poll();
 };
+// Another tab, or the Photos app, may have deleted things while this one was in the background.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && SETTLED.includes(state.status) && !state.viewing && !state.busy) load({ limit: Math.max(PAGE, state.items.length) });
+});
 // Keep "measured 5 minutes ago" honest while the page sits open.
 setInterval(renderFreshness, 60000);
 poll();

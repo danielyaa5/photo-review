@@ -3,5 +3,6 @@ Photo Review.app/
 .DS_Store
 .playwright-mcp/
 LAUNCH.md
+TIKTOK.md
 release/build/
 release/PhotoReview.xcodeproj/

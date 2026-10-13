@@ -80,6 +80,8 @@
   #jobs { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
   #jobs .head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
   #jobs .head b { flex: 1; }
+  /* When the originals will be deleted: easy to miss in the rows, so it gets a line of its own. */
+  #jnote { margin: 0 0 8px; padding: 7px 10px; border-left: 3px solid var(--accent); background: var(--bg); border-radius: 6px; font-size: 13px; }
   .job { display: grid; grid-template-columns: minmax(120px, 1.2fr) minmax(160px, 2fr) auto; gap: 4px 12px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); }
   .job .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .job .status { color: var(--muted); font-size: 13px; }
@@ -163,6 +165,7 @@
   <div id="notice" class="notice" hidden></div>
   <section id="jobs" hidden>
     <div class="head"><b>Shrinking videos</b><button id="jclear">Clear finished</button></div>
+    <p id="jnote" hidden></p>
     <div id="joblist"></div>
   </section>
   <div id="grid"></div>
@@ -195,7 +198,7 @@
     <p id="sestimate"></p>
     <p id="sboth" hidden></p>
     <label class="check" id="sdeleterow"><input type="checkbox" id="sdelete"> <span id="sdeletetext"></span></label>
-    <p>macOS asks you to confirm once, when the whole queue has finished. Deleted originals stay in Recently Deleted for 30 days.</p>
+    <p>macOS asks you to confirm once, when the whole queue has finished, not after each video. Deleted originals stay in Recently Deleted for 30 days.</p>
     <p>HDR videos stay HDR, and HDR, ProRes and other 10-bit videos are always saved as HEVC so they keep their full colour depth. Edits are baked in, and captions, keywords and people tags don't carry over.</p>
     <p id="salso" hidden></p>
     <div class="row"><button id="scancel">Cancel</button><button id="sstart" class="primary">Start</button></div>
@@ -641,7 +644,7 @@ function renderEstimate() {
   // Videos picked with Both lose their original either way; the tick box decides for the rest.
   const both = state.toBoth.size, plain = state.toShrink.size;
   $("sboth").hidden = both === 0;
-  $("sboth").textContent = `The ${both === 1 ? "video" : `${both} videos`} picked with Both will have ${both === 1 ? "its original" : "their originals"} deleted once the smaller cop${both === 1 ? "y is" : "ies are"} in Photos.`;
+  $("sboth").textContent = `The ${both === 1 ? "video" : `${both} videos`} picked with Both will have ${both === 1 ? "its original" : "their originals"} deleted at the end, after the whole queue has finished.`;
   $("sdeleterow").hidden = plain === 0;
   $("sdeletetext").textContent = both === 0 ? "Delete each original once its smaller copy is in Photos"
     : `Delete the original${plain === 1 ? "" : "s"} of the other ${plain === 1 ? "video" : plain + " videos"} as well`;
@@ -722,11 +725,7 @@ function jobStatus(job) {
       if (job.copyDeleted) return saved + " The smaller copy has since been deleted.";
       if (job.originalDeleted) return saved + " Original deleted.";
       // macOS is asked once, for every original together, and only when nothing is left in the queue.
-      if (job.deletion === "pending") {
-        return saved + (state.queueLeft
-          ? ` The original will be deleted when the whole queue has finished (${state.queueLeft} video${state.queueLeft === 1 ? "" : "s"} still to go). macOS asks you to confirm then, once for all of them.`
-          : " Waiting for you to confirm deleting the original in the Photo Review dialog.");
-      }
+      if (job.deletion === "pending") return saved + (state.queueLeft ? " Its original will be deleted at the end of the queue." : " Waiting for you to confirm in the Photo Review dialog.");
       if (job.deletion === "kept") return saved + " Original kept: " + (job.message || "the deletion wasn't confirmed.");
       return saved + " Check the new copy, then delete the original.";
     }
@@ -737,6 +736,13 @@ function jobStatus(job) {
 const jobRows = new Map();
 function renderJobs(jobs) {
   $("jobs").hidden = jobs.length === 0;
+  // Originals picked for deletion all go together after the last video, with one macOS confirmation.
+  const left = jobs.filter((job) => ACTIVE.includes(job.state)).length;
+  const doomed = jobs.filter((job) => job.deleteOriginal && !job.originalDeleted && (ACTIVE.includes(job.state) || job.deletion === "pending")).length;
+  $("jnote").hidden = doomed === 0;
+  $("jnote").textContent = left
+    ? `${doomed === 1 ? "1 original is" : doomed + " originals are"} set to be deleted. macOS asks you to confirm once, when the whole queue has finished (${left} video${left === 1 ? "" : "s"} still to go), not after each video.`
+    : `The queue has finished. macOS is asking you to confirm deleting ${doomed === 1 ? "1 original" : doomed + " originals"}: look for the Photo Review dialog.`;
   for (const [id, row] of jobRows) {
     if (!jobs.some((job) => job.id === id)) { row.node.remove(); jobRows.delete(id); }
   }

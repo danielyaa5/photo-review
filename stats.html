@@ -62,6 +62,7 @@
   th button.sort.on .arrow { opacity: 1; }
   .outcome { font-weight: 600; white-space: nowrap; }
   .outcome.skipped, .outcome.cancelled { font-weight: 400; }
+  .outcome.deleted { color: var(--danger); }
   .reason { font-size: 13px; max-width: 260px; }
   tr.unfinished td { color: var(--muted); }
   tr.unfinished td.name, tr.unfinished .outcome { color: var(--fg); }
@@ -261,9 +262,9 @@ function render(data) {
     const outcome = el("div", { className: "outcome " + e.outcome, textContent: results[e.outcome] || e.outcome });
     if (!finished) {
       rows.push({ time: Date.parse(e.time), saved: 0, node: el("tr", { className: "unfinished" }, [
-        cell(when(e.time), "when"), cell(e.name, "name"),
+        cell(when(e.time), "when"), cell(e.name, "name"), cell("", "number"), cell(size(e.originalBytes) + ", unchanged", "sizes"),
         el("td", { className: "result" }, [outcome, ...(e.message ? [el("div", { className: "sub reason", textContent: e.message })] : [])]),
-        cell(size(e.originalBytes) + ", unchanged", "sizes"), cell("", "number"), details,
+        details,
       ]) });
       continue;
     }
@@ -290,8 +291,8 @@ function render(data) {
     ]);
     rows.push({ time: Date.parse(e.time), saved: copyGone || (originalGone && !counted) ? 0 : difference, node: el("tr", {}, [
       cell(when(e.time), "when"), el("td", { className: "name" }, [el("div", { textContent: e.name }), links]),
-      el("td", { className: "result" }, [outcome, el("div", { className: "sub", textContent: fate })]),
-      cell(`${size(e.originalBytes)} → ${size(e.newBytes)}`, "sizes"), saved, details,
+      saved, cell(`${size(e.originalBytes)} → ${size(e.newBytes)}`, "sizes"),
+      el("td", { className: "result" }, [outcome, el("div", { className: "sub", textContent: fate })]), details,
     ]) });
   }
   for (const e of deletes) {
@@ -302,8 +303,8 @@ function render(data) {
     const names = items.slice(0, 3).map((item) => item.name).join(", ") + (items.length > 3 ? ` and ${items.length - 3} more` : "");
     rows.push({ time: Date.parse(e.time), saved: bytes, node: el("tr", {}, [
       cell(when(e.time), "when"), cell(items.length === 1 ? names : `${plural(items.length, "item")}: ${names}`, "name"),
-      el("td", { className: "result" }, [el("div", { className: "outcome", textContent: "Deleted" })]),
-      cell(size(bytes), "sizes"), el("td", { className: "number" }, [el("span", { className: "figure saved", textContent: size(bytes) })]), cell("", "details"),
+      el("td", { className: "number" }, [el("span", { className: "figure saved", textContent: size(bytes) })]), cell(size(bytes), "sizes"),
+      el("td", { className: "result" }, [el("div", { className: "outcome deleted", textContent: "Deleted" })]), cell("", "details"),
     ]) });
   }
   rows.sort((a, b) => {
@@ -312,7 +313,7 @@ function render(data) {
   });
   sections.push(el("h2", { textContent: "History" }),
     el("p", { className: "muted caption", textContent: "Everything shrunk or deleted here. A shrunk video and what became of its original share one row. Click When or Saved to sort." }),
-    table([sortHeader("When", "when"), ["Item"], ["What happened"], ["Size"], sortHeader("Saved", "saved", "number"), ["Details"]], rows.map((row) => row.node)));
+    table([sortHeader("When", "when"), ["Item"], sortHeader("Saved", "saved", "number"), ["Size"], ["What happened"], ["Details"]], rows.map((row) => row.node)));
   return sections;
 }
 

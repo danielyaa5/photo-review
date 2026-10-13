@@ -73,7 +73,7 @@
   #bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line); padding: 12px 20px; display: none; align-items: center; gap: 12px; }
   #bar.on { display: flex; }
   #bar .count { font-weight: 650; }
-  #bar .group { display: inline-flex; align-items: center; gap: 10px; }
+  #bar .count.second { border-left: 1px solid var(--line); padding-left: 12px; }
   #bar .hint { color: var(--muted); font-size: 12px; flex: 1; }
   #toast { position: fixed; left: 50%; bottom: 80px; transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 9px 16px; border-radius: 8px; display: none; max-width: 80vw; }
 
@@ -105,6 +105,7 @@
   #spreview .skip { color: var(--muted); }
   #shrink #sestimate { color: var(--fg); font-size: 14px; margin-top: 14px; }
   #shrink #sboth { color: var(--fg); margin: 12px 0 4px; }
+  #shrink #salso { color: var(--fg); }
   #shrink .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 
   #viewer { position: fixed; inset: 0; background: rgba(0, 0, 0, .92); display: none; flex-direction: column; z-index: 10; }
@@ -126,9 +127,10 @@
     #match { margin-left: 0; flex-basis: 100%; }
     .job { grid-template-columns: 1fr; }
     #bar { flex-wrap: wrap; padding: 10px 14px; gap: 8px; }
-    #bar .group { width: 100%; justify-content: space-between; }
+    #bar .count { flex-basis: 100%; }
+    #bar .count.second { border-left: 0; padding-left: 0; }
     #bar .hint { order: 5; flex-basis: 100%; }
-    #bar .group button { white-space: nowrap; }
+    #bar #act { flex: 3; white-space: nowrap; }
     #bar #clear { flex: 1; }
     #shrink label { flex-direction: column; align-items: stretch; gap: 4px; }
     #shrink select { width: 100%; }
@@ -168,8 +170,9 @@
 </main>
 
 <div id="bar">
-  <span class="group" id="gshrink"><span class="count" id="shrinkcount"></span><button id="shrinkopen" class="primary">Shrink…</button></span>
-  <span class="group" id="gdelete"><span class="count" id="deletecount"></span><button id="delete" class="danger">Delete…</button></span>
+  <span class="count" id="shrinkcount"></span>
+  <span class="count" id="deletecount"></span>
+  <button id="act" class="primary"></button>
   <span class="hint">Deleted items move to Recently Deleted in Photos for 30 days. iCloud space is freed when they leave it.</span>
   <button id="clear">Clear</button>
 </div>
@@ -194,6 +197,7 @@
     <label class="check" id="sdeleterow"><input type="checkbox" id="sdelete"> <span id="sdeletetext"></span></label>
     <p>macOS asks you to confirm once, when the whole queue has finished. Deleted originals stay in Recently Deleted for 30 days.</p>
     <p>HDR videos stay HDR, and HDR, ProRes and other 10-bit videos are always saved as HEVC so they keep their full colour depth. Edits are baked in, and captions, keywords and people tags don't carry over.</p>
+    <p id="salso" hidden></p>
     <div class="row"><button id="scancel">Cancel</button><button id="sstart" class="primary">Start</button></div>
   </div>
 </div>
@@ -465,13 +469,19 @@ function renderBar() {
   const total = (map) => [...map.values()].reduce((sum, item) => sum + item.bytes, 0);
   const both = state.toBoth.size, shrinks = state.toShrink.size + both, deletes = state.toDelete.size;
   $("bar").classList.toggle("on", shrinks + deletes > 0);
-  $("gshrink").hidden = shrinks === 0;
-  $("gdelete").hidden = deletes === 0;
+  $("shrinkcount").hidden = shrinks === 0;
+  $("deletecount").hidden = deletes === 0;
+  $("deletecount").classList.toggle("second", shrinks > 0);
   $("shrinkcount").textContent = `${shrinks} to shrink${both ? `, ${both} then delete` : ""} · ${size(total(state.toShrink) + total(state.toBoth))}`;
   $("deletecount").textContent = `${deletes} to delete · ${size(total(state.toDelete))}`;
-  $("shrinkopen").textContent = `Shrink ${shrinks} video${shrinks === 1 ? "" : "s"}…`;
-  $("delete").textContent = state.busy ? "Confirm in the Photo Review dialog…" : `Delete ${deletes} item${deletes === 1 ? "" : "s"}…`;
-  $("delete").disabled = state.busy;
+  // One button for whatever has been picked. It is red only when deleting is all it will do.
+  const act = $("act");
+  act.textContent = state.busy ? "Confirm in the Photo Review dialog…"
+    : shrinks && deletes ? `Shrink ${shrinks} and delete ${deletes}…`
+    : shrinks ? `Shrink ${shrinks} video${shrinks === 1 ? "" : "s"}…`
+    : `Delete ${deletes} item${deletes === 1 ? "" : "s"}…`;
+  act.className = shrinks ? "primary" : "danger";
+  act.disabled = state.busy;
   // The reminder about Recently Deleted only matters when something is marked for deletion.
   document.querySelector("#bar .hint").hidden = deletes === 0;
 }
@@ -561,8 +571,10 @@ $("kinds").onclick = (event) => {
 $("year").onchange = () => { state.year = $("year").value; load(); };
 $("more").onclick = () => load({ offset: state.items.length, append: true });
 $("clear").onclick = () => { for (const pick of PICKS) state[pick].clear(); renderGrid(); pollJobs(); };
-$("delete").onclick = async () => {
+// Asks Photos to delete everything picked with Delete. macOS shows its own confirmation first.
+async function deletePicked() {
   const doomed = [...state.toDelete.values()];
+  if (!doomed.length) return;
   const bytes = doomed.reduce((sum, item) => sum + item.bytes, 0);
   state.busy = true;
   renderBar();
@@ -576,7 +588,10 @@ $("delete").onclick = async () => {
     toast(result.error || "Nothing was deleted.");
   }
   renderBar();
-};
+}
+// With videos to shrink, the button opens the shrink settings and anything picked with Delete goes
+// ahead from there. With only deletions picked, it deletes straight away.
+$("act").onclick = () => (state.toShrink.size + state.toBoth.size ? openShrink() : deletePicked());
 $("vprev").onclick = () => step(-1);
 $("vnext").onclick = () => step(1);
 $("vclose").onclick = closeViewer;
@@ -648,23 +663,38 @@ function renderEstimate() {
   if (options.fps === "keep") text += " The higher figure applies to videos shot at 60 fps.";
   if (skipped) text += ` ${skipped} will be skipped.`;
   $("sestimate").textContent = text;
-  $("sstart").disabled = skipped === videos.length;
+  // Anything picked with Delete is dealt with from this dialog too, so the button says so.
+  const deletes = state.toDelete.size, items = `${deletes} item${deletes === 1 ? "" : "s"}`;
+  nothingToShrink = skipped === videos.length;
+  $("salso").hidden = deletes === 0;
+  $("salso").textContent = `The ${deletes === 1 ? "item" : items} you picked with Delete (${size([...state.toDelete.values()].reduce((sum, item) => sum + item.bytes, 0))}) ${deletes === 1 ? "is" : "are"} deleted as soon as you press the button below. macOS asks you to confirm.`;
+  $("sstart").textContent = !deletes ? "Start" : nothingToShrink ? `Delete ${items}` : `Start and delete ${items}`;
+  $("sstart").disabled = nothingToShrink && deletes === 0;
 }
-$("shrinkopen").onclick = () => { renderEstimate(); $("shrink").classList.add("on"); };
+// True when every picked video would be skipped as already small enough.
+let nothingToShrink = false;
+function openShrink() {
+  renderEstimate();
+  $("shrink").classList.add("on");
+}
 $("scancel").onclick = () => $("shrink").classList.remove("on");
 for (const id of ["sres", "sfps", "scodec", "squality", "sdelete"]) $(id).onchange = renderEstimate;
 $("sstart").onclick = async () => {
   const videos = selectedVideos();
-  const result = await post("/api/shrink", {
-    ids: videos.map((item) => item.id), ...shrinkOptions(),
-    deleteOriginal: $("sdelete").checked && state.toShrink.size > 0, deleteOriginalIds: [...state.toBoth.keys()],
-  });
   $("shrink").classList.remove("on");
-  if (!result.ok) return toast(result.error);
-  // From here their tiles show progress; originals are marked for deletion as their copies arrive.
-  for (const item of videos) { state.toShrink.delete(item.id); state.toBoth.delete(item.id); }
-  await pollJobs();
-  renderGrid();
+  if (!nothingToShrink) {
+    const result = await post("/api/shrink", {
+      ids: videos.map((item) => item.id), ...shrinkOptions(),
+      deleteOriginal: $("sdelete").checked && state.toShrink.size > 0, deleteOriginalIds: [...state.toBoth.keys()],
+    });
+    if (!result.ok) return toast(result.error);
+    // From here their tiles show progress; originals are marked for deletion as their copies arrive.
+    for (const item of videos) { state.toShrink.delete(item.id); state.toBoth.delete(item.id); }
+    await pollJobs();
+    renderGrid();
+  }
+  // Anything picked with Delete goes now. Originals of the videos being shrunk wait for the queue.
+  await deletePicked();
 };
 $("jclear").onclick = async () => { await post("/api/jobs/clear", {}); pollJobs(); };
 

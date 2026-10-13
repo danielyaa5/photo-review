@@ -34,7 +34,8 @@ is uploaded anywhere.
 - **Delete with a safety net.** Nothing is removed until you approve the standard macOS confirmation, and
   deleted items go to Recently Deleted for 30 days.
 - **Savings page.** A running total of what you have freed, split into what shrinking saved and what deleting
-  saved, plus what is still waiting on you and a log of every shrink attempt and deletion.
+  saved, plus what is still waiting on you. One history table lists every shrink and deletion, and sorts by
+  date or by space saved.
 - **Quick to reopen.** Measuring a large library takes a minute or more, so the result is kept for a day.
   The page says when it was measured, and "Update now" measures again.
 

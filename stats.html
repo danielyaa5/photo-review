@@ -49,7 +49,14 @@
   td.number, th.number { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   td.name { min-width: 170px; max-width: 320px; overflow-wrap: anywhere; }
   td.when { white-space: nowrap; color: var(--muted); }
-  td.result { min-width: 130px; }
+  td.result { min-width: 150px; }
+  td.details { min-width: 170px; font-size: 13px; color: var(--muted); }
+  td .sub { font-size: 13px; color: var(--muted); font-weight: 400; white-space: normal; }
+  td.number .sub { white-space: nowrap; }
+  th button.sort { border: 0; background: none; padding: 0; font-size: 13px; font-weight: 500; color: inherit; }
+  th button.sort:hover, th button.sort.on { color: var(--fg); }
+  th button.sort .arrow { display: inline-block; width: 1em; text-align: center; opacity: .55; }
+  th button.sort.on .arrow { opacity: 1; }
   .outcome { font-weight: 600; white-space: nowrap; }
   .outcome.skipped, .outcome.cancelled { font-weight: 400; }
   .reason { font-size: 13px; max-width: 260px; }
@@ -146,11 +153,35 @@ function tile(label, value, note) {
 }
 function table(headers, rows) {
   return el("div", { className: "scroll" }, [el("table", {}, [
-    el("thead", {}, [el("tr", {}, headers.map(([text, cls]) => el("th", { textContent: text, className: cls || "" })))]),
+    el("thead", {}, [el("tr", {}, headers.map((header) => header instanceof Node ? header : el("th", { textContent: header[0], className: header[1] || "" })))]),
     el("tbody", {}, rows),
   ])]);
 }
 const cell = (text, className = "") => el("td", { textContent: text, className });
+
+// How the history table is ordered. It lives outside render() so a refresh doesn't put it back.
+const sort = { key: "when", descending: true };
+let shown = null;  // the data currently on the page
+function draw() {
+  if (shown) $("content").replaceChildren(...render(shown));
+}
+// A column heading that sorts the history by that column; clicking it again turns the order around.
+function sortHeader(label, key, className = "") {
+  const active = sort.key === key;
+  const button = el("button", { className: "sort" + (active ? " on" : ""), title: `Sort by ${label.toLowerCase()}` }, [
+    label + " ", el("span", { className: "arrow", textContent: active ? (sort.descending ? "↓" : "↑") : "↕" }),
+  ]);
+  button.dataset.key = key;
+  button.onclick = () => {
+    sort.descending = active ? !sort.descending : true;
+    sort.key = key;
+    draw();
+    document.querySelector(`button.sort[data-key="${key}"]`)?.focus();
+  };
+  const heading = el("th", { className }, [button]);
+  heading.setAttribute("aria-sort", active ? (sort.descending ? "descending" : "ascending") : "none");
+  return heading;
+}
 
 function render(data) {
   const events = data.events;
@@ -214,55 +245,68 @@ function render(data) {
   const sections = [hero, tiles];
   if (!data.ready) sections.push(el("p", { className: "muted", textContent: "Still measuring the library, so whether originals are still present may be out of date for a minute." }));
 
-  // One table for every attempt, so it's plain which ones finished and which didn't.
-  if (shrinks.length) {
-    const results = { done: "✓ Completed", failed: "✕ Failed", skipped: "Skipped", cancelled: "Cancelled" };
-    sections.push(el("h2", { textContent: "Shrink attempts" }),
-      el("p", { className: "muted caption", textContent: "Completed means a smaller copy was added to Photos. Anything else left the library untouched." }),
-      table(
-      [["When"], ["Video"], ["Result"], ["Size before and after"], ["Saved", "number"], ["Original"], ["Time taken"], ["Settings"]],
-      [...shrinks].reverse().map((e) => {
-        const finished = e.outcome === "done";
-        const share = finished && e.originalBytes ? e.newBytes / e.originalBytes : 0;
-        const result = el("td", { className: "result" }, [
-          el("div", { className: "outcome " + e.outcome, textContent: results[e.outcome] || e.outcome }),
-          ...(!finished && e.message ? [el("div", { className: "muted reason", textContent: e.message })] : []),
-        ]);
-        const taken = [e.downloadSeconds ? span(e.downloadSeconds) + " download" : "", e.encodeSeconds ? span(e.encodeSeconds) + " encode" : ""].filter(Boolean).join(", ");
-        if (!finished) {
-          return el("tr", { className: "unfinished" }, [
-            cell(when(e.time), "when"), cell(e.name, "name"), result, cell(size(e.originalBytes) + ", unchanged"),
-            cell("", "number"), cell(""), cell(taken), cell(settings(e.settings)),
-          ]);
-        }
-        const original = !e.copyExists ? "Smaller copy deleted" : e.originalExists ? "Still in the library" : "Deleted";
-        // Only items still in the library can be shown in Photos, and an original is only offered for
-        // deletion while its smaller copy is still there to take its place.
-        const remove = el("button", { className: "danger", textContent: "Delete original" });
-        remove.onclick = () => deleteOriginal(e, remove);
-        const links = el("div", { className: "links" }, [
-          ...(e.copyExists ? [photosButton("Open copy in Photos", e.newId)] : []),
-          ...(e.originalExists ? [photosButton("Open original in Photos", e.assetId)] : []),
-          ...(e.originalExists && e.copyExists ? [remove] : []),
-        ]);
-        return el("tr", {}, [
-          cell(when(e.time), "when"), el("td", { className: "name" }, [el("div", { textContent: e.name }), links]), result,
-          cell(`${size(e.originalBytes)} → ${size(e.newBytes)}`, "sizes"),
-          cell(`${size(e.originalBytes - e.newBytes)} (${Math.round(100 * (1 - share))}%)`, "number"),
-          cell(original), cell(taken), cell(settings(e.settings)),
-        ]);
-      })));
+  // One table for everything that happened. A shrink and the deletion of its original are one row,
+  // so each row's Saved figure is counted once; deletions of anything else get rows of their own.
+  const deletedAt = new Map(deletes.flatMap((e) => (e.items || []).map((item) => [item.id, e.time])));
+  const on = (id) => deletedAt.has(id) ? " " + when(deletedAt.get(id)) : "";
+  const results = { done: "✓ Shrunk", failed: "✕ Shrink failed", skipped: "Shrink skipped", cancelled: "Shrink cancelled" };
+  const rows = [];
+  for (const e of shrinks) {
+    const finished = e.outcome === "done";
+    const taken = [e.downloadSeconds ? span(e.downloadSeconds) + " download" : "", e.encodeSeconds ? span(e.encodeSeconds) + " encode" : ""].filter(Boolean).join(", ");
+    const details = el("td", { className: "details" }, [el("div", { textContent: taken }), el("div", { textContent: settings(e.settings) })]);
+    const outcome = el("div", { className: "outcome " + e.outcome, textContent: results[e.outcome] || e.outcome });
+    if (!finished) {
+      rows.push({ time: Date.parse(e.time), saved: 0, node: el("tr", { className: "unfinished" }, [
+        cell(when(e.time), "when"), cell(e.name, "name"),
+        el("td", { className: "result" }, [outcome, ...(e.message ? [el("div", { className: "sub reason", textContent: e.message })] : [])]),
+        cell(size(e.originalBytes) + ", unchanged", "sizes"), cell("", "number"), details,
+      ]) });
+      continue;
+    }
+    const copyGone = gone(e.newId, e.copyExists), originalGone = gone(e.assetId, e.originalExists);
+    const counted = replaced.includes(e);
+    const fate = copyGone ? "Smaller copy deleted" + on(e.newId) : originalGone ? "Original deleted" + on(e.assetId) : "Original still in the library";
+    // Space is only saved once the original is gone, and not at all if the copy was deleted instead.
+    const difference = e.originalBytes - e.newBytes;
+    const figure = `${size(difference)} (${e.originalBytes ? Math.round(100 * difference / e.originalBytes) : 0}%)`;
+    const saved = copyGone || (originalGone && !counted)
+      ? cell("—", "number")
+      : el("td", { className: "number" }, [figure, ...(counted ? [] : [el("div", { className: "sub", textContent: "once the original is deleted" })])]);
+    // Only items still in the library can be shown in Photos, and an original is only offered for
+    // deletion while its smaller copy is still there to take its place.
+    const remove = el("button", { className: "danger", textContent: "Delete original" });
+    remove.onclick = () => deleteOriginal(e, remove);
+    const links = el("div", { className: "links" }, [
+      ...(e.copyExists ? [photosButton("Open copy in Photos", e.newId)] : []),
+      ...(e.originalExists ? [photosButton("Open original in Photos", e.assetId)] : []),
+      ...(e.originalExists && e.copyExists ? [remove] : []),
+    ]);
+    rows.push({ time: Date.parse(e.time), saved: copyGone || (originalGone && !counted) ? 0 : difference, node: el("tr", {}, [
+      cell(when(e.time), "when"), el("td", { className: "name" }, [el("div", { textContent: e.name }), links]),
+      el("td", { className: "result" }, [outcome, el("div", { className: "sub", textContent: fate })]),
+      cell(`${size(e.originalBytes)} → ${size(e.newBytes)}`, "sizes"), saved, details,
+    ]) });
   }
-  if (deletes.length) {
-    sections.push(el("h2", { textContent: "Deletions" }), table(
-      [["When"], ["Items"], ["Size", "number"]],
-      [...deletes].reverse().map((e) => {
-        const items = e.items || [];
-        const names = items.slice(0, 3).map((item) => item.name).join(", ") + (items.length > 3 ? ` and ${items.length - 3} more` : "");
-        return el("tr", {}, [cell(when(e.time), "when"), cell(`${plural(items.length, "item")}: ${names}`, "name"),
-          cell(size(items.reduce((sum, item) => sum + item.bytes, 0)), "number")]);
-      })));
+  for (const e of deletes) {
+    // Originals replaced by a smaller copy, and deleted smaller copies, are already told by their shrink's row.
+    const items = (e.items || []).filter((item) => !credited.has(item.id) && !copyIds.has(item.id));
+    if (!items.length) continue;
+    const bytes = sum(items, (item) => item.bytes);
+    const names = items.slice(0, 3).map((item) => item.name).join(", ") + (items.length > 3 ? ` and ${items.length - 3} more` : "");
+    rows.push({ time: Date.parse(e.time), saved: bytes, node: el("tr", {}, [
+      cell(when(e.time), "when"), cell(items.length === 1 ? names : `${plural(items.length, "item")}: ${names}`, "name"),
+      el("td", { className: "result" }, [el("div", { className: "outcome", textContent: "Deleted" })]),
+      cell(size(bytes), "sizes"), cell(size(bytes), "number"), cell("", "details"),
+    ]) });
   }
+  rows.sort((a, b) => {
+    const by = sort.key === "saved" ? a.saved - b.saved : a.time - b.time;
+    return (sort.descending ? -by : by) || b.time - a.time;
+  });
+  sections.push(el("h2", { textContent: "History" }),
+    el("p", { className: "muted caption", textContent: "Everything shrunk or deleted here. A shrunk video and what became of its original share one row. Click When or Saved to sort." }),
+    table([sortHeader("When", "when"), ["Item"], ["What happened"], ["Size"], sortHeader("Saved", "saved", "number"), ["Details"]], rows.map((row) => row.node)));
   return sections;
 }
 
@@ -274,7 +318,8 @@ async function refresh() {
     // Only redraw when something changed, so text stays selectable between refreshes.
     if (text !== last) {
       last = text;
-      $("content").replaceChildren(...render(JSON.parse(text)));
+      shown = JSON.parse(text);
+      draw();
     }
   } catch (error) {
     if (!last) $("content").replaceChildren(el("p", { className: "muted", textContent: "Photo Review isn't responding. Open the app, then reload this page." }));

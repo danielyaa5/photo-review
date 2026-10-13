@@ -8,12 +8,12 @@
 <style>
   :root {
     --bg: #f5f5f2; --card: #ffffff; --fg: #1b1b1d; --muted: #6a6a70; --line: #e1e1dc;
-    --accent: #0a62d0; --danger: #c22f28;
+    --accent: #0a62d0; --danger: #c22f28; --good: #1a7f37;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #151517; --card: #212124; --fg: #f1f1f2; --muted: #9b9ba2; --line: #34343a;
-      --accent: #63a6ff; --danger: #ff6a60;
+      --accent: #63a6ff; --danger: #ff6a60; --good: #4cc26b;
     }
   }
   * { box-sizing: border-box; }
@@ -53,6 +53,9 @@
   td.details { min-width: 170px; font-size: 13px; color: var(--muted); }
   td .sub { font-size: 13px; color: var(--muted); font-weight: 400; white-space: normal; }
   td.number .sub { white-space: nowrap; }
+  /* The Saved column is what the page is about, so its figures stand out; green once the space is really saved. */
+  td.number .figure { font-size: 17px; font-weight: 600; line-height: 1.25; }
+  td.number .figure.saved { color: var(--good); }
   th button.sort { border: 0; background: none; padding: 0; font-size: 13px; font-weight: 500; color: inherit; }
   th button.sort:hover, th button.sort.on { color: var(--fg); }
   th button.sort .arrow { display: inline-block; width: 1em; text-align: center; opacity: .55; }
@@ -272,7 +275,10 @@ function render(data) {
     const figure = `${size(difference)} (${e.originalBytes ? Math.round(100 * difference / e.originalBytes) : 0}%)`;
     const saved = copyGone || (originalGone && !counted)
       ? cell("—", "number")
-      : el("td", { className: "number" }, [figure, ...(counted ? [] : [el("div", { className: "sub", textContent: "once the original is deleted" })])]);
+      : el("td", { className: "number" }, [
+        el("span", { className: "figure" + (counted ? " saved" : ""), textContent: figure }),
+        ...(counted ? [] : [el("div", { className: "sub", textContent: "once the original is deleted" })]),
+      ]);
     // Only items still in the library can be shown in Photos, and an original is only offered for
     // deletion while its smaller copy is still there to take its place.
     const remove = el("button", { className: "danger", textContent: "Delete original" });
@@ -297,7 +303,7 @@ function render(data) {
     rows.push({ time: Date.parse(e.time), saved: bytes, node: el("tr", {}, [
       cell(when(e.time), "when"), cell(items.length === 1 ? names : `${plural(items.length, "item")}: ${names}`, "name"),
       el("td", { className: "result" }, [el("div", { className: "outcome", textContent: "Deleted" })]),
-      cell(size(bytes), "sizes"), cell(size(bytes), "number"), cell("", "details"),
+      cell(size(bytes), "sizes"), el("td", { className: "number" }, [el("span", { className: "figure saved", textContent: size(bytes) })]), cell("", "details"),
     ]) });
   }
   rows.sort((a, b) => {

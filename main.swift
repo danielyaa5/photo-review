@@ -515,6 +515,19 @@ final class History {
         }
         return copies
     }
+
+    /// For every smaller copy this app has made, the size of the original it came from (copy id -> bytes).
+    func origins() -> [String: Int64] {
+        lock.lock()
+        defer { lock.unlock() }
+        var origins: [String: Int64] = [:]
+        for event in events where event["type"] as? String == "shrink" && event["outcome"] as? String == "done" {
+            if let copy = event["newId"] as? String, !copy.isEmpty, let bytes = (event["originalBytes"] as? NSNumber)?.int64Value {
+                origins[copy] = bytes
+            }
+        }
+        return origins
+    }
 }
 
 // MARK: - Shrinking
@@ -1306,12 +1319,19 @@ final class Server {
             }
             // A video whose smaller copy is in Photos while the original is still here carries that copy
             // along. This comes from the history file, so its tile can say so after the app is restarted.
-            let copies = history.copies()
-            if !copies.isEmpty, let items = result["items"] as? [[String: Any]] {
+            // A smaller copy says what it was shrunk from, so it isn't mistaken for something still to do.
+            // The history knows the original's size; a copy made elsewhere is recognised by its name alone.
+            let copies = history.copies(), origins = history.origins()
+            if let items = result["items"] as? [[String: Any]] {
                 result["items"] = items.map { item -> [String: Any] in
-                    guard let copy = copies[item["id"] as? String ?? ""].flatMap({ library.item($0) }) else { return item }
                     var item = item
-                    item["copy"] = copy.json
+                    let id = item["id"] as? String ?? ""
+                    if let copy = copies[id].flatMap({ library.item($0) }) { item["copy"] = copy.json }
+                    if let bytes = origins[id] {
+                        item["shrunkFrom"] = bytes
+                    } else if ((item["name"] as? String ?? "") as NSString).deletingPathExtension.hasSuffix(" (shrunk)") {
+                        item["shrunkFrom"] = 0
+                    }
                     return item
                 }
             }

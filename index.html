@@ -8,12 +8,12 @@
 <style>
   :root {
     --bg: #f5f5f2; --card: #ffffff; --fg: #1b1b1d; --muted: #6a6a70; --line: #e1e1dc;
-    --accent: #0a62d0; --danger: #c22f28; --shade: rgba(0, 0, 0, .55);
+    --accent: #0a62d0; --danger: #c22f28; --shade: rgba(0, 0, 0, .55); --good: #1a7f37;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #151517; --card: #212124; --fg: #f1f1f2; --muted: #9b9ba2; --line: #34343a;
-      --accent: #63a6ff; --danger: #ff6a60; --shade: rgba(0, 0, 0, .7);
+      --accent: #63a6ff; --danger: #ff6a60; --shade: rgba(0, 0, 0, .7); --good: #1a7f37;
     }
   }
   * { box-sizing: border-box; }
@@ -67,6 +67,8 @@
   .work .line { height: 3px; background: rgba(255, 255, 255, .3); border-radius: 2px; margin-top: 5px; overflow: hidden; }
   .work .line div { height: 100%; background: #fff; }
   .card.working .badge { display: none; }
+  /* Marks a smaller copy made by shrinking, so it isn't taken for a video that still needs doing. */
+  .chip { position: absolute; left: 6px; top: 6px; background: var(--good); color: #fff; font-size: 12px; font-weight: 600; padding: 1px 7px; border-radius: 5px; }
   #more { display: block; margin: 22px auto 0; padding: 9px 22px; }
   .notice { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; max-width: 620px; }
 
@@ -375,6 +377,7 @@ function renderGrid() {
       const thumb = el("div", { className: "thumb" }, [
         picture,
         ...(item.video ? [el("span", { className: "badge", textContent: "▶ " + duration(item.dur) })] : []),
+        el("span", { className: "chip", hidden: true }),
         el("div", { className: "work", hidden: true }, [el("span"), el("div", { className: "line" }, [el("div")])]),
       ]);
       thumb.onclick = () => view(index);
@@ -446,6 +449,9 @@ function renderTiles() {
     const shrinking = state.toShrink.has(id), doingBoth = state.toBoth.has(id), deleting = state.toDelete.has(id);
     const work = tileWork(state.work.get(id), items.get(id));
     const shrunk = items.has(id) && shrunkAlready(items.get(id));
+    const chip = card.querySelector(".chip"), from = items.get(id)?.shrunkFrom;
+    chip.hidden = from == null;
+    chip.textContent = from ? `✓ Shrunk from ${size(from)}` : "✓ Shrunk copy";
     card.classList.toggle("shrinking", shrinking);
     card.classList.toggle("both", doingBoth);
     card.classList.toggle("deleting", deleting);
@@ -535,7 +541,7 @@ function renderViewerBar() {
   const item = state.viewing;
   const place = state.current >= 0 ? ` · ${state.current + 1} of ${state.match.toLocaleString()}` : "";
   $("vsize").textContent = size(item.bytes);
-  $("vmeta").textContent = ` · ${item.date || "No date"} · ${item.name}${item.video ? " · " + duration(item.dur) : ""}${place}${item.copy ? ` · already shrunk to ${size(item.copy.bytes)}, original not deleted` : ""}`;
+  $("vmeta").textContent = ` · ${item.date || "No date"} · ${item.name}${item.video ? " · " + duration(item.dur) : ""}${place}${item.copy ? ` · already shrunk to ${size(item.copy.bytes)}, original not deleted` : ""}${item.shrunkFrom != null ? ` · a shrunk copy${item.shrunkFrom ? ", was " + size(item.shrunkFrom) : ""}` : ""}`;
   const busy = isBusy(item.id);
   const shrunk = shrunkAlready(item);
   $("vshrink").hidden = !item.video || shrunk;
@@ -660,7 +666,7 @@ function renderEstimate() {
     const unsure = guess && options.fps === "keep" && estimate(item, options, 60) > item.bytes * 0.8;
     return el("div", { className: "line" + (guess ? "" : " skip") }, [
       el("span", { className: "name", textContent: item.name, title: item.name }),
-      el("span", { textContent: !guess ? `${size(item.bytes)}, already this small` : `${size(item.bytes)} → ${range(guess.low, guess.high)}${unsure ? " (may be skipped)" : ""}${doomed(item) ? " · original deleted" : ""}` }),
+      el("span", { textContent: !guess ? `${size(item.bytes)}, already this small` : `${size(item.bytes)} → ${range(guess.low, guess.high)}${unsure ? " (may be skipped)" : ""}${item.shrunkFrom != null ? " · already a shrunk copy" : ""}${doomed(item) ? " · original deleted" : ""}` }),
     ]);
   }));
   $("stitle").textContent = `Shrink ${videos.length} video${videos.length === 1 ? "" : "s"}`;

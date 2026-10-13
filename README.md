@@ -24,7 +24,8 @@ is uploaded anywhere.
 - **Three separate picks.** Each video has Shrink, Both and Delete buttons, so you can line up some videos to
   shrink and other things to delete, then start it all with one button. Both means shrink it, then delete the
   original once the smaller copy is in Photos. A video in the queue shows its progress on its tile, and one
-  that has already been shrunk says so and offers only Delete original.
+  that has already been shrunk says so and offers only Delete original. The smaller copies themselves carry
+  a "Shrunk from 25.60 GB" label, so they aren't mistaken for videos still to do.
 - **Shrink videos.** Pick a resolution cap (4K, 1080p, 720p), a frame-rate cap, HEVC or H.264, and a quality
   level. A size estimate updates as you choose. The smaller copy is added to Photos with the original's date,
   location, favorite flag and albums.

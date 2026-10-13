@@ -5,8 +5,8 @@
 
 ![Previewing a video, selecting three, shrinking them and seeing the space saved](docs/demo.gif)
 
-<sub>The demo uses made-up data. In real use macOS asks you to confirm before anything is deleted; that
-dialog isn't shown here.</sub>
+<sub>The demo uses made-up names and sizes, with free placeholder photos standing in for a real library. In
+real use macOS asks you to confirm before anything is deleted; that dialog isn't shown here.</sub>
 
 Photos on the Mac can't sort by file size, so a handful of huge videos can quietly use most of an iCloud plan.
 Photo Review lists everything in your library from largest to smallest, lets you preview each item, and gives
@@ -44,7 +44,8 @@ is uploaded anywhere.
 |---|---|---|
 | ![The library view, largest first](docs/screenshot-library.png) | ![The shrink dialog with a per-video size estimate](docs/screenshot-shrink.png) | ![The savings page](docs/screenshot-savings.png) |
 
-The screenshots use made-up data.
+The screenshots use made-up data. The pictures in them and in the demo are free placeholder photos from
+[Lorem Picsum](https://picsum.photos), which draws on [Unsplash](https://unsplash.com/license).
 
 ## How shrinking works
 

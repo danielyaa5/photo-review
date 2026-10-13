@@ -225,7 +225,7 @@ const PAGE = 60;
 // "Both" means shrink the video, then delete its original once the smaller copy is in Photos.
 // `work` is the latest shrink job for each video (asset id -> job).
 // `viewing` is the item open in the viewer, `current` its index in the list or -1.
-const state = { items: [], toShrink: new Map(), toBoth: new Map(), toDelete: new Map(), work: new Map(), kind: "all", year: "", match: 0, status: "starting", current: -1, viewing: null, busy: false, jobs: new Map(), gone: new Set(), downloading: false, offline: false, measuredAt: null, updating: "" };
+const state = { items: [], toShrink: new Map(), toBoth: new Map(), toDelete: new Map(), work: new Map(), kind: "all", year: "", match: 0, status: "starting", current: -1, viewing: null, busy: false, jobs: new Map(), gone: new Set(), downloading: false, queueLeft: 0, offline: false, measuredAt: null, updating: "" };
 const $ = (id) => document.getElementById(id);
 
 function size(bytes) {
@@ -412,7 +412,9 @@ function tileWork(job, item) {
       if (job.copyDeleted) return earlier;
       if (!job.newItem || job.originalDeleted) return null;
       // While its deletion is waiting on the macOS confirmation, the original is spoken for.
-      return job.deletion === "pending" ? { text: "Smaller copy ready · deleting this original", busy: true } : shrunk(job.newBytes);
+      // Originals are deleted in one go when the queue is empty; until then this one just waits.
+      if (job.deletion === "pending") return { text: state.queueLeft ? "Smaller copy ready · original deleted when the queue finishes" : "Smaller copy ready · confirm the deletion", busy: true };
+      return shrunk(job.newBytes);
     case "failed": return { text: "Couldn't be shrunk" };
     case "skipped": return { text: "Already small enough" };
     default: return earlier;
@@ -719,7 +721,12 @@ function jobStatus(job) {
       if (!job.newItem) return saved + " Test run: nothing was added to Photos.";
       if (job.copyDeleted) return saved + " The smaller copy has since been deleted.";
       if (job.originalDeleted) return saved + " Original deleted.";
-      if (job.deletion === "pending") return saved + " The original will be deleted when the queue finishes; macOS will ask you to confirm.";
+      // macOS is asked once, for every original together, and only when nothing is left in the queue.
+      if (job.deletion === "pending") {
+        return saved + (state.queueLeft
+          ? ` The original will be deleted when the whole queue has finished (${state.queueLeft} video${state.queueLeft === 1 ? "" : "s"} still to go). macOS asks you to confirm then, once for all of them.`
+          : " Waiting for you to confirm deleting the original in the Photo Review dialog.");
+      }
       if (job.deletion === "kept") return saved + " Original kept: " + (job.message || "the deletion wasn't confirmed.");
       return saved + " Check the new copy, then delete the original.";
     }
@@ -802,6 +809,7 @@ async function pollJobs() {
     state.jobs.set(job.id, job.state);
   }
   state.downloading = jobs.some((job) => job.state === "downloading");
+  state.queueLeft = jobs.filter((job) => ACTIVE.includes(job.state)).length;
   // Later jobs for the same video replace earlier ones, so a retry shows the retry.
   state.work = new Map(jobs.map((job) => [job.assetId, job]));
   for (const id of state.work.keys()) {

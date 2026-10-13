@@ -987,8 +987,9 @@ final class Converter {
         defer { ProcessInfo.processInfo.endActivity(activity) }
         let output = FileManager.default.temporaryDirectory.appendingPathComponent("photo-review-\(UUID().uuidString).mov")
         defer { if !job.dryRun { try? FileManager.default.removeItem(at: output) } }
-        // Cancelled while it was waiting: already marked, nothing to do.
-        if isCancelled(job) { return }
+        // Cancelled while it was waiting: already marked, nothing to do, except that it may have been
+        // the last thing the originals of earlier videos were waiting for.
+        if isCancelled(job) { return deleteOriginalsIfIdle() }
         do {
             guard let asset = library.asset(job.assetId), asset.mediaType == .video else {
                 throw ShrinkError.failed("This video is no longer in the library.")

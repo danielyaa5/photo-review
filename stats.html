@@ -193,7 +193,7 @@ function render(data) {
   const done = shrinks.filter((e) => e.outcome === "done");
   const deletes = events.filter((e) => e.type === "delete");
   if (!events.length) {
-    return [el("div", { className: "empty", textContent: "Nothing here yet. Shrink or delete something in the library and it will show up on this page." })];
+    return [el("div", { className: "empty", textContent: "Nothing here yet. Compress or delete something in the library and it will show up on this page." })];
   }
 
   const deletedItems = deletes.flatMap((e) => e.items || []);
@@ -226,7 +226,7 @@ function render(data) {
   const net = savedByShrinking + savedByDeleting - waitingCopies;
 
   const parts = [
-    ...(replaced.length ? [`${size(savedByShrinking)} from shrinking ${plural(replaced.length, "video")}`] : []),
+    ...(replaced.length ? [`${size(savedByShrinking)} from compressing ${plural(replaced.length, "video")}`] : []),
     ...(outright.length ? [`${size(savedByDeleting)} from deleting ${plural(outright.length, "item")} outright`] : []),
   ];
   const hero = el("div", { className: "hero" }, [
@@ -240,10 +240,10 @@ function render(data) {
 
   const outcomes = ["done", "failed", "skipped", "cancelled"].map((o) => [o, shrinks.filter((e) => e.outcome === o).length]).filter(([, n]) => n);
   const tiles = el("div", { className: "tiles" }, [
-    tile("Saved by shrinking", size(savedByShrinking), replaced.length ? `${plural(replaced.length, "video")}: ${size(shrunkBefore)} → ${size(shrunkAfter)}` : "No originals replaced yet"),
+    tile("Saved by compressing", size(savedByShrinking), replaced.length ? `${plural(replaced.length, "video")}: ${size(shrunkBefore)} → ${size(shrunkAfter)}` : "No originals replaced yet"),
     tile("Saved by deleting", size(savedByDeleting), outright.length ? plural(outright.length, "item") + " deleted outright" : "Nothing deleted outright"),
     tile("Ready to free", size(waitingBytes), waiting.length ? plural(waiting.length, "original") + " with a smaller copy" : "No originals waiting"),
-    tile("Shrink attempts", shrinks.length.toLocaleString(), outcomes.map(([o, n]) => `${n} ${o === "done" ? "completed" : o}`).join(", ") || "None yet"),
+    tile("Compression attempts", shrinks.length.toLocaleString(), outcomes.map(([o, n]) => `${n} ${o === "done" ? "completed" : o}`).join(", ") || "None yet"),
   ]);
 
   const sections = [hero, tiles];
@@ -253,7 +253,7 @@ function render(data) {
   // so each row's Saved figure is counted once; deletions of anything else get rows of their own.
   const deletedAt = new Map(deletes.flatMap((e) => (e.items || []).map((item) => [item.id, e.time])));
   const on = (id) => deletedAt.has(id) ? " " + when(deletedAt.get(id)) : "";
-  const results = { done: "✓ Shrunk", failed: "✕ Shrink failed", skipped: "Shrink skipped", cancelled: "Shrink cancelled" };
+  const results = { done: "✓ Compressed", failed: "✕ Compression failed", skipped: "Compression skipped", cancelled: "Compression cancelled" };
   const rows = [];
   for (const e of shrinks) {
     const finished = e.outcome === "done";
@@ -313,7 +313,7 @@ function render(data) {
     return (sort.descending ? -by : by) || b.time - a.time;
   });
   sections.push(el("h2", { textContent: "History" }),
-    el("p", { className: "muted caption", textContent: "Everything shrunk or deleted here. A shrunk video and what became of its original share one row. Click When or Saved to sort." }),
+    el("p", { className: "muted caption", textContent: "Everything compressed or deleted here. A compressed video and what became of its original share one row. Click When or Saved to sort." }),
     table([sortHeader("When", "when"), sortHeader("Saved", "saved", "number"), ["Size"], ["What happened"], ["Item"], ["Details"]], rows.map((row) => row.node)));
   return sections;
 }

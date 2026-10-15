@@ -1142,7 +1142,7 @@ final class Converter {
         try PHPhotoLibrary.shared().performChangesAndWait {
             let request = PHAssetCreationRequest.forAsset()
             let options = PHAssetResourceCreationOptions()
-            options.originalFilename = (name as NSString).deletingPathExtension + " (shrunk).mov"
+            options.originalFilename = (name as NSString).deletingPathExtension + " (compressed).mov"
             options.shouldMoveFile = true
             request.addResource(with: .video, fileURL: file, options: options)
             request.creationDate = original.creationDate
@@ -1329,7 +1329,8 @@ final class Server {
                     if let copy = copies[id].flatMap({ library.item($0) }) { item["copy"] = copy.json }
                     if let bytes = origins[id] {
                         item["shrunkFrom"] = bytes
-                    } else if ((item["name"] as? String ?? "") as NSString).deletingPathExtension.hasSuffix(" (shrunk)") {
+                    } else if [" (compressed)", " (shrunk)"].contains(where: { ((item["name"] as? String ?? "") as NSString).deletingPathExtension.hasSuffix($0) }) {
+                        // Copies made before the button was renamed end in "(shrunk)".
                         item["shrunkFrom"] = 0
                     }
                     return item
@@ -1361,7 +1362,7 @@ final class Server {
                 ids: payload["ids"] as? [String] ?? [], settings: ShrinkSettings(payload),
                 dryRun: payload["dryRun"] as? Bool ?? false, deleteOriginal: payload["deleteOriginal"] as? Bool ?? false,
                 deleteOriginalIds: Set(payload["deleteOriginalIds"] as? [String] ?? []))
-            sendJSON(connection, ["ok": started > 0, "started": started, "error": started > 0 ? "" : "No videos to shrink."])
+            sendJSON(connection, ["ok": started > 0, "started": started, "error": started > 0 ? "" : "No videos to compress."])
         case ("GET", "/api/jobs"):
             converter.checkOriginals()
             sendJSON(connection, ["jobs": converter.list()])
@@ -1539,7 +1540,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func confirmQuit() -> Bool {
         if quitConfirmed || server?.hasActiveJobs != true { return true }
         let alert = NSAlert()
-        alert.messageText = "A video is still being shrunk"
+        alert.messageText = "A video is still being compressed"
         alert.informativeText = "Quitting now stops it and discards the progress so far, including any download from iCloud."
         alert.addButton(withTitle: "Keep Running")
         alert.addButton(withTitle: "Quit Anyway")

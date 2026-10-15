@@ -69,8 +69,13 @@
   .info { padding: 9px 10px 10px; }
   .size { font-size: 16px; font-weight: 650; }
   .meta { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .actions { display: flex; gap: 6px; margin-top: 8px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .actions button { flex: 1; padding: 5px 4px; font-size: 13px; white-space: nowrap; }
+  /* Compress & delete, the main choice, has a row of its own above Delete and Compress, outlined and lettered
+     in blue. Delete is outlined and lettered in red, because it deletes. Picked, each fills in with white text. */
+  .actions .pickboth { flex-basis: 100%; }
+  .pickboth, button.mainline { font-weight: 600; color: var(--accent); border-color: var(--accent); }
+  .pickdelete, button.redline { color: var(--danger); border-color: var(--danger); }
   .card.shrinking .pickshrink { background: var(--accent); border-color: var(--accent); color: #fff; }
   .card.both .pickboth { background: var(--accent); border-color: var(--accent); color: #fff; }
   .card.deleting .pickdelete { background: var(--danger); border-color: var(--danger); color: #fff; }
@@ -171,16 +176,16 @@
   <section id="guide" aria-label="What the buttons do">
     <div class="steps">
       <div class="step">
-        <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"/></svg></span>
-        <div><b>Shrink</b><p>Makes a much smaller copy of a video. The original stays until you delete it.</p></div>
-      </div>
-      <div class="step">
         <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.3-4.3L4 8.5M4 4v4.5h4.5M4 13a8 8 0 0 0 14.3 4.3L20 15.5M20 20v-4.5h-4.5"/></svg></span>
-        <div><b>Both</b><p>Makes the smaller copy, then deletes the original once the whole queue has finished.</p></div>
+        <div><b>Compress &amp; delete</b><p>Makes the smaller copy, then deletes the original once the whole queue has finished.</p></div>
       </div>
       <div class="step">
         <span class="ico delete"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l.9 12a1.6 1.6 0 0 0 1.6 1.5h6a1.6 1.6 0 0 0 1.6-1.5l.9-12M10 11v6M14 11v6"/></svg></span>
-        <div><b>Delete</b><p>Removes the item without shrinking it.</p></div>
+        <div><b>Delete</b><p>Removes the item without compressing it.</p></div>
+      </div>
+      <div class="step">
+        <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"/></svg></span>
+        <div><b>Compress</b><p>Makes a much smaller copy of a video. The original stays until you delete it.</p></div>
       </div>
     </div>
     <p class="foot"><span>Pick what you want on each item, then press the button that appears at the bottom. macOS asks you to confirm before anything is deleted, and deleted items stay in Recently Deleted for 30 days.</span><button id="guidehide" class="link">Hide</button></p>
@@ -200,7 +205,7 @@
 <main>
   <div id="notice" class="notice" hidden></div>
   <section id="jobs" hidden>
-    <div class="head"><b>Shrinking videos</b><button id="jclear">Clear finished</button></div>
+    <div class="head"><b>Compressing videos</b><button id="jclear">Clear finished</button></div>
     <p id="jnote" hidden></p>
     <div id="joblist"></div>
   </section>
@@ -218,8 +223,8 @@
 
 <div id="shrink">
   <div class="dialog" role="dialog" aria-labelledby="stitle">
-    <h2 id="stitle">Shrink videos</h2>
-    <p>Each video is downloaded from iCloud at full quality, re-encoded on this Mac, and added to Photos as a new item with the same date, location, favorite and albums. The original stays until you delete it, unless you picked Both for it or tick the box below.</p>
+    <h2 id="stitle">Compress videos</h2>
+    <p>Each video is downloaded from iCloud at full quality, re-encoded on this Mac, and added to Photos as a new item with the same date, location, favorite and albums. The original stays until you delete it, unless you picked Compress &amp; delete for it or tick the box below.</p>
     <p><b>Leave room on your Mac:</b> downloaded originals can grow the Photos library. Use Optimize Mac Storage in Photos' iCloud settings and smaller batches if space is tight. After checking the smaller copies and their iCloud upload, you can permanently remove only their replaced originals from Recently Deleted. This deletes those originals across your iCloud Photos devices and ends recovery. <a href="https://danielyaa5.github.io/photo-review/#storage" target="_blank" rel="noopener noreferrer">Photos storage guide</a></p>
     <label>Resolution <select id="sres">
       <option value="keep">Keep original</option><option value="2160">4K at most</option>
@@ -249,11 +254,11 @@
     <button id="vprev">← Previous</button>
     <button id="vnext">Next →</button>
     <button id="vreveal">Open in Photos</button>
-    <button id="vshrink"></button>
-    <button id="vboth" title="Shrink, then delete the original"></button>
+    <button id="vboth" title="Compress, then delete the original"></button>
     <button id="vdelete"></button>
+    <button id="vshrink"></button>
     <button id="vclose">Close</button>
-    <div class="keys">← → to move · S to shrink · B for both (shrink, then delete the original) · X to delete · Esc to close</div>
+    <div class="keys">← → to move · B to compress &amp; delete · X to delete · C to compress · Esc to close</div>
   </div>
 </div>
 
@@ -261,7 +266,8 @@
 const TOKEN = "__TOKEN__";
 const PAGE = 60;
 // `toShrink`, `toBoth` and `toDelete` are the selections (id -> item), and an item is in at most one of them.
-// "Both" means shrink the video, then delete its original once the smaller copy is in Photos.
+// "Both" (the "Compress & delete" button) means compress the video, then delete its original once the queue is done.
+// "Shrink" in the code is the "Compress" button.
 // `work` is the latest shrink job for each video (asset id -> job).
 // `viewing` is the item open in the viewer, `current` its index in the list or -1.
 const state = { items: [], toShrink: new Map(), toBoth: new Map(), toDelete: new Map(), work: new Map(), kind: "all", year: "", match: 0, status: "starting", current: -1, viewing: null, busy: false, jobs: new Map(), gone: new Set(), downloading: false, queueLeft: 0, offline: false, measuredAt: null, updating: "" };
@@ -395,7 +401,7 @@ function renderGrid() {
     $("grid").replaceChildren(...state.items.map((item, index) => {
       const shrink = el("button", { className: "pickshrink" });
       shrink.onclick = () => toggle("toShrink", item);
-      const both = el("button", { className: "pickboth", title: "Shrink, then delete the original" });
+      const both = el("button", { className: "pickboth", title: "Compress, then delete the original" });
       both.onclick = () => toggle("toBoth", item);
       const remove = el("button", { className: "pickdelete" });
       remove.onclick = () => toggle("toDelete", item);
@@ -423,7 +429,7 @@ function renderGrid() {
           el("div", { className: "meta", textContent: details, title: details }),
           el("div", { className: "meta", textContent: item.name, title: item.name }),
           // Only videos can be shrunk; photos just get Delete.
-          el("div", { className: "actions" }, item.video ? [shrink, both, remove] : [remove]),
+          el("div", { className: "actions" }, item.video ? [both, remove, shrink] : [remove]),
           reveal,
         ]),
       ]);
@@ -439,14 +445,14 @@ function renderGrid() {
 // What the shrink queue and past shrinks mean for a video's tile: a short label, and progress when
 // there is some. `item.copy` is the smaller copy made earlier, there for as long as both are in Photos.
 function tileWork(job, item) {
-  const shrunk = (bytes) => ({ text: `Shrunk to ${size(bytes)} · original not deleted` });
+  const shrunk = (bytes) => ({ text: `Compressed to ${size(bytes)} · original not deleted` });
   const earlier = item?.copy ? shrunk(item.copy.bytes) : null;
   if (!job) return earlier;
   const percent = Math.round(job.progress * 100);
   switch (job.state) {
-    case "queued": return { text: "Waiting to be shrunk", busy: true };
+    case "queued": return { text: "Waiting to be compressed", busy: true };
     case "downloading": return { text: percent >= 1 ? `Downloading · ${percent}%` : "Downloading from iCloud…", progress: job.progress, busy: true };
-    case "encoding": return { text: `Shrinking · ${percent}%`, progress: job.progress, busy: true };
+    case "encoding": return { text: `Compressing · ${percent}%`, progress: job.progress, busy: true };
     case "saving": return { text: "Adding the copy to Photos", busy: true };
     case "done":
       if (job.copyDeleted) return earlier;
@@ -455,7 +461,7 @@ function tileWork(job, item) {
       // Originals are deleted in one go when the queue is empty; until then this one just waits.
       if (job.deletion === "pending") return { text: state.queueLeft ? "Smaller copy ready · original deleted when the queue finishes" : "Smaller copy ready · confirm the deletion", busy: true };
       return shrunk(job.newBytes);
-    case "failed": return { text: "Couldn't be shrunk" };
+    case "failed": return { text: "Couldn't be compressed" };
     case "skipped": return { text: "Already small enough" };
     default: return earlier;
   }
@@ -467,7 +473,7 @@ function shrunkAlready(item) {
   const job = state.work.get(item.id);
   return Boolean(item.copy || (job && job.state === "done" && job.newItem && !job.originalDeleted && !job.copyDeleted));
 }
-// Takes videos that have been shrunk in the meantime out of the Shrink and Both selections.
+// Takes videos that have been compressed in the meantime out of the Compress and Compress & delete selections.
 function dropShrunkPicks() {
   const items = new Map(state.items.map((item) => [item.id, item]));
   for (const pick of ["toShrink", "toBoth"]) {
@@ -485,16 +491,16 @@ function renderTiles() {
     const shrunk = items.has(id) && shrunkAlready(items.get(id));
     const chip = card.querySelector(".chip"), from = items.get(id)?.shrunkFrom;
     chip.hidden = from == null;
-    chip.textContent = from ? `✓ Shrunk from ${size(from)}` : "✓ Shrunk copy";
+    chip.textContent = from ? `✓ Compressed from ${size(from)}` : "✓ Compressed copy";
     card.classList.toggle("shrinking", shrinking);
     card.classList.toggle("both", doingBoth);
     card.classList.toggle("deleting", deleting);
     card.classList.toggle("working", Boolean(work));
     const shrink = card.querySelector(".pickshrink"), both = card.querySelector(".pickboth"), remove = card.querySelector(".pickdelete");
     if (shrink) {
-      shrink.textContent = shrinking ? "✓ Shrink" : "Shrink";
+      shrink.textContent = shrinking ? "✓ Compress" : "Compress";
       shrink.disabled = Boolean(work?.busy);
-      both.textContent = doingBoth ? "✓ Both" : "Both";
+      both.textContent = doingBoth ? "✓ Compress & delete" : "Compress & delete";
       both.disabled = Boolean(work?.busy);
       shrink.hidden = both.hidden = shrunk;
     }
@@ -517,13 +523,13 @@ function renderBar() {
   $("shrinkcount").hidden = shrinks === 0;
   $("deletecount").hidden = deletes === 0;
   $("deletecount").classList.toggle("second", shrinks > 0);
-  $("shrinkcount").textContent = `${shrinks} to shrink${both ? `, ${both} then delete` : ""} · ${size(total(state.toShrink) + total(state.toBoth))}`;
+  $("shrinkcount").textContent = `${shrinks} to compress${both ? `, ${both} then delete` : ""} · ${size(total(state.toShrink) + total(state.toBoth))}`;
   $("deletecount").textContent = `${deletes} to delete · ${size(total(state.toDelete))}`;
   // One button for whatever has been picked. It is red only when deleting is all it will do.
   const act = $("act");
   act.textContent = state.busy ? "Confirm in the Photo Review dialog…"
-    : shrinks && deletes ? `Shrink ${shrinks} and delete ${deletes}…`
-    : shrinks ? `Shrink ${shrinks} video${shrinks === 1 ? "" : "s"}…`
+    : shrinks && deletes ? `Compress ${shrinks} and delete ${deletes}…`
+    : shrinks ? `Compress ${shrinks} video${shrinks === 1 ? "" : "s"}…`
     : `Delete ${deletes} item${deletes === 1 ? "" : "s"}…`;
   act.className = shrinks ? "primary" : "danger";
   act.disabled = state.busy;
@@ -559,7 +565,7 @@ function view(index, item = state.items[index]) {
   const poster = "/thumb?size=1600&id=" + id;
   if (item.video) {
     // Videos that live only in iCloud take a few seconds while Photos fetches a smaller copy.
-    const busy = "Photos fetches one thing from iCloud at a time, and it's busy downloading an original to shrink. Previews of iCloud-only videos have to wait until that's done.";
+    const busy = "Photos fetches one thing from iCloud at a time, and it's busy downloading an original to compress. Previews of iCloud-only videos have to wait until that's done.";
     const note = el("p", { className: "loading", textContent: state.downloading ? busy : "Getting the video from Photos… this can take a few seconds if it's only in iCloud." });
     const video = el("video", { controls: true, autoplay: true, poster, src: "/video?id=" + id });
     video.onloadeddata = () => note.remove();
@@ -575,19 +581,19 @@ function renderViewerBar() {
   const item = state.viewing;
   const place = state.current >= 0 ? ` · ${state.current + 1} of ${state.match.toLocaleString()}` : "";
   $("vsize").textContent = size(item.bytes);
-  $("vmeta").textContent = ` · ${item.date || "No date"} · ${item.name}${item.video ? " · " + duration(item.dur) : ""}${place}${item.copy ? ` · already shrunk to ${size(item.copy.bytes)}, original not deleted` : ""}${item.shrunkFrom != null ? ` · a shrunk copy${item.shrunkFrom ? ", was " + size(item.shrunkFrom) : ""}` : ""}`;
+  $("vmeta").textContent = ` · ${item.date || "No date"} · ${item.name}${item.video ? " · " + duration(item.dur) : ""}${place}${item.copy ? ` · already compressed to ${size(item.copy.bytes)}, original not deleted` : ""}${item.shrunkFrom != null ? ` · a compressed copy${item.shrunkFrom ? ", was " + size(item.shrunkFrom) : ""}` : ""}`;
   const busy = isBusy(item.id);
   const shrunk = shrunkAlready(item);
   $("vshrink").hidden = !item.video || shrunk;
-  $("vshrink").textContent = state.toShrink.has(item.id) ? "✓ Shrink" : "Shrink";
+  $("vshrink").textContent = state.toShrink.has(item.id) ? "✓ Compress" : "Compress";
   $("vshrink").className = state.toShrink.has(item.id) ? "primary" : "";
   $("vshrink").disabled = busy;
   $("vboth").hidden = !item.video || shrunk;
-  $("vboth").textContent = state.toBoth.has(item.id) ? "✓ Both" : "Both";
-  $("vboth").className = state.toBoth.has(item.id) ? "primary" : "";
+  $("vboth").textContent = state.toBoth.has(item.id) ? "✓ Compress & delete" : "Compress & delete";
+  $("vboth").className = state.toBoth.has(item.id) ? "primary" : "mainline";
   $("vboth").disabled = busy;
   $("vdelete").textContent = (state.toDelete.has(item.id) ? "✓ " : "") + (shrunk ? "Delete original" : "Delete");
-  $("vdelete").className = state.toDelete.has(item.id) ? "danger" : "";
+  $("vdelete").className = state.toDelete.has(item.id) ? "danger" : "redline";
   $("vdelete").disabled = busy;
   $("vprev").disabled = state.current <= 0;
   $("vnext").disabled = state.current < 0 || state.current >= state.match - 1;
@@ -652,7 +658,8 @@ document.addEventListener("keydown", (event) => {
   else if (event.key === "ArrowLeft") step(-1);
   else if (event.key === "ArrowRight") step(1);
   else if (event.key.toLowerCase() === "x") toggle("toDelete", state.viewing);
-  else if (event.key.toLowerCase() === "s") toggle("toShrink", state.viewing);
+  // C for Compress; S, from when the button said Shrink, still works.
+  else if (["c", "s"].includes(event.key.toLowerCase())) toggle("toShrink", state.viewing);
   else if (event.key.toLowerCase() === "b") toggle("toBoth", state.viewing);
 });
 
@@ -681,10 +688,10 @@ function range(low, high) {
 }
 function renderEstimate() {
   const videos = selectedVideos(), options = shrinkOptions();
-  // Videos picked with Both lose their original either way; the tick box decides for the rest.
+  // Videos picked with Compress & delete lose their original either way; the tick box decides for the rest.
   const both = state.toBoth.size, plain = state.toShrink.size;
   $("sboth").hidden = both === 0;
-  $("sboth").textContent = `The ${both === 1 ? "video" : `${both} videos`} picked with Both will have ${both === 1 ? "its original" : "their originals"} deleted at the end, after the whole queue has finished.`;
+  $("sboth").textContent = `The ${both === 1 ? "video" : `${both} videos`} picked with Compress & delete will have ${both === 1 ? "its original" : "their originals"} deleted at the end, after the whole queue has finished.`;
   $("sdeleterow").hidden = plain === 0;
   $("sdeletetext").textContent = both === 0 ? "Delete each original once its smaller copy is in Photos"
     : `Delete the original${plain === 1 ? "" : "s"} of the other ${plain === 1 ? "video" : plain + " videos"} as well`;
@@ -700,10 +707,10 @@ function renderEstimate() {
     const unsure = guess && options.fps === "keep" && estimate(item, options, 60) > item.bytes * 0.8;
     return el("div", { className: "line" + (guess ? "" : " skip") }, [
       el("span", { className: "name", textContent: item.name, title: item.name }),
-      el("span", { textContent: !guess ? `${size(item.bytes)}, already this small` : `${size(item.bytes)} → ${range(guess.low, guess.high)}${unsure ? " (may be skipped)" : ""}${item.shrunkFrom != null ? " · already a shrunk copy" : ""}${doomed(item) ? " · original deleted" : ""}` }),
+      el("span", { textContent: !guess ? `${size(item.bytes)}, already this small` : `${size(item.bytes)} → ${range(guess.low, guess.high)}${unsure ? " (may be skipped)" : ""}${item.shrunkFrom != null ? " · already a compressed copy" : ""}${doomed(item) ? " · original deleted" : ""}` }),
     ]);
   }));
-  $("stitle").textContent = `Shrink ${videos.length} video${videos.length === 1 ? "" : "s"}`;
+  $("stitle").textContent = `Compress ${videos.length} video${videos.length === 1 ? "" : "s"}`;
   let text = `Total: ${size(before)} → about ${range(low, high)}, freeing ${range(before - high, before - low)}.`;
   if (options.fps === "keep") text += " The higher figure applies to videos shot at 60 fps.";
   if (skipped) text += ` ${skipped} will be skipped.`;

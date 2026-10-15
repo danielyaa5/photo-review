@@ -135,7 +135,7 @@ and [deleting and recovering items on iCloud.com](https://support.apple.com/guid
 
 ## Things to know before you rely on it
 
-- **It is new.** It has been built and tested on one Mac (Apple silicon, macOS 27) against one large library.
+- **It is new.** It has been tested on two Macs so far, and used for real on one large library.
   Start with a video you don't care about, and keep a backup of anything irreplaceable.
 - **Downloads are the slow part.** Photos fetches one original at a time, so a 25 GB video can take over an
   hour before encoding starts. Dropped connections are retried, and Photos has resumed where it left off.

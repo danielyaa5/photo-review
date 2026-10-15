@@ -261,7 +261,7 @@ function render(data) {
     const details = el("td", { className: "details" }, [el("div", { textContent: taken }), el("div", { textContent: settings(e.settings) })]);
     const outcome = el("div", { className: "outcome " + e.outcome, textContent: results[e.outcome] || e.outcome });
     if (!finished) {
-      rows.push({ time: Date.parse(e.time), saved: 0, node: el("tr", { className: "unfinished" }, [
+      rows.push({ time: Date.parse(e.time), saved: 0, size: e.originalBytes, node: el("tr", { className: "unfinished" }, [
         cell(when(e.time), "when"), cell("", "number"), cell(size(e.originalBytes) + ", unchanged", "sizes"),
         el("td", { className: "result" }, [outcome, ...(e.message ? [el("div", { className: "sub reason", textContent: e.message })] : [])]),
         cell(e.name, "name"), details,
@@ -289,7 +289,7 @@ function render(data) {
       ...(e.originalExists ? [photosButton("Open original in Photos", e.assetId)] : []),
       ...(e.originalExists && e.copyExists ? [remove] : []),
     ]);
-    rows.push({ time: Date.parse(e.time), saved: copyGone || (originalGone && !counted) ? 0 : difference, node: el("tr", {}, [
+    rows.push({ time: Date.parse(e.time), saved: copyGone || (originalGone && !counted) ? 0 : difference, size: e.originalBytes, node: el("tr", {}, [
       cell(when(e.time), "when"), saved, cell(`${size(e.originalBytes)} → ${size(e.newBytes)}`, "sizes"),
       el("td", { className: "result" }, [outcome, el("div", { className: "sub", textContent: fate })]),
       el("td", { className: "name" }, [el("div", { textContent: e.name }), links]), details,
@@ -301,7 +301,7 @@ function render(data) {
     if (!items.length) continue;
     const bytes = sum(items, (item) => item.bytes);
     const names = items.slice(0, 3).map((item) => item.name).join(", ") + (items.length > 3 ? ` and ${items.length - 3} more` : "");
-    rows.push({ time: Date.parse(e.time), saved: bytes, node: el("tr", {}, [
+    rows.push({ time: Date.parse(e.time), saved: bytes, size: bytes, node: el("tr", {}, [
       cell(when(e.time), "when"),
       el("td", { className: "number" }, [el("span", { className: "figure saved", textContent: size(bytes) })]), cell(size(bytes), "sizes"),
       el("td", { className: "result" }, [el("div", { className: "outcome deleted", textContent: "Deleted" })]),
@@ -309,12 +309,13 @@ function render(data) {
     ]) });
   }
   rows.sort((a, b) => {
-    const by = sort.key === "saved" ? a.saved - b.saved : a.time - b.time;
+    // Size is the item's size before anything was done to it: the original for a video, the total for a deletion.
+    const by = sort.key === "saved" ? a.saved - b.saved : sort.key === "size" ? a.size - b.size : a.time - b.time;
     return (sort.descending ? -by : by) || b.time - a.time;
   });
   sections.push(el("h2", { textContent: "History" }),
-    el("p", { className: "muted caption", textContent: "Everything compressed or deleted here. A compressed video and what became of its original share one row. Click When or Saved to sort." }),
-    table([sortHeader("When", "when"), sortHeader("Saved", "saved", "number"), ["Size"], ["What happened"], ["Item"], ["Details"]], rows.map((row) => row.node)));
+    el("p", { className: "muted caption", textContent: "Everything compressed or deleted here. A compressed video and what became of its original share one row. Click When, Saved or Size to sort." }),
+    table([sortHeader("When", "when"), sortHeader("Saved", "saved", "number"), sortHeader("Size", "size"), ["What happened"], ["Item"], ["Details"]], rows.map((row) => row.node)));
   return sections;
 }
 

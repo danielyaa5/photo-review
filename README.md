@@ -37,7 +37,7 @@ is uploaded anywhere.
   deleted items go to Recently Deleted for 30 days.
 - **Savings page.** A running total of what you have freed, split into what compressing saved and what
   deleting saved, plus what is still waiting on you. One history table lists every compression and deletion,
-  and sorts by date, by size or by space saved.
+  sorts by date, by size or by space saved, and can show only videos or only photos.
 - **Quick to reopen.** Measuring a large library takes a minute or more, so the result is kept for a day.
   The page says when it was measured, and "Update now" measures again.
 

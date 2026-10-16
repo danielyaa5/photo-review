@@ -66,7 +66,13 @@
   .reason { font-size: 13px; max-width: 260px; }
   tr.unfinished td { color: var(--muted); }
   tr.unfinished td.name, tr.unfinished .outcome { color: var(--fg); }
-  .caption { margin: -4px 0 8px; }
+  .historybar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin: -4px 0 10px; }
+  .caption { margin: 0; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; background: var(--card); }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  td.none { color: var(--muted); padding: 18px 14px; }
   td.sizes { white-space: nowrap; }
   .empty { background: var(--card); border: 1px dashed var(--line); border-radius: 12px; padding: 22px; color: var(--muted); margin-top: 16px; }
 </style>
@@ -186,6 +192,25 @@ function sortHeader(label, key, className = "") {
   heading.setAttribute("aria-sort", active ? (sort.descending ? "descending" : "ascending") : "none");
   return heading;
 }
+// Which items the history shows: everything, only videos or only photos. Kept outside render() like the order.
+const filter = { kind: "all" };
+const isVideo = (item) => item.video ?? /\.(mov|mp4|m4v|3gp|avi|mkv|mts)$/i.test(item.name || "");
+function kindButtons() {
+  const group = el("div", { className: "seg" }, [["all", "All"], ["video", "Videos"], ["photo", "Photos"]].map(([kind, label]) => {
+    const button = el("button", { textContent: label });
+    button.dataset.kind = kind;
+    button.setAttribute("aria-pressed", filter.kind === kind);
+    button.onclick = () => {
+      filter.kind = kind;
+      draw();
+      document.querySelector(`.seg button[data-kind="${kind}"]`)?.focus();
+    };
+    return button;
+  }));
+  group.setAttribute("role", "group");
+  group.setAttribute("aria-label", "Show in the history");
+  return group;
+}
 
 function render(data) {
   const events = data.events;
@@ -255,7 +280,8 @@ function render(data) {
   const on = (id) => deletedAt.has(id) ? " " + when(deletedAt.get(id)) : "";
   const results = { done: "✓ Compressed", failed: "✕ Compression failed", skipped: "Compression skipped", cancelled: "Compression cancelled" };
   const rows = [];
-  for (const e of shrinks) {
+  // Only videos are ever compressed, so showing photos leaves just the deletions.
+  for (const e of filter.kind === "photo" ? [] : shrinks) {
     const finished = e.outcome === "done";
     const taken = [e.downloadSeconds ? span(e.downloadSeconds) + " download" : "", e.encodeSeconds ? span(e.encodeSeconds) + " encode" : ""].filter(Boolean).join(", ");
     const details = el("td", { className: "details" }, [el("div", { textContent: taken }), el("div", { textContent: settings(e.settings) })]);
@@ -297,7 +323,9 @@ function render(data) {
   }
   for (const e of deletes) {
     // Originals replaced by a smaller copy, and deleted smaller copies, are already told by their shrink's row.
-    const items = (e.items || []).filter((item) => !credited.has(item.id) && !copyIds.has(item.id));
+    // With videos or photos picked, a deletion that took both shows only the matching items and their size.
+    const items = (e.items || []).filter((item) => !credited.has(item.id) && !copyIds.has(item.id) &&
+      (filter.kind === "all" || (filter.kind === "video") === isVideo(item)));
     if (!items.length) continue;
     const bytes = sum(items, (item) => item.bytes);
     const names = items.slice(0, 3).map((item) => item.name).join(", ") + (items.length > 3 ? ` and ${items.length - 3} more` : "");
@@ -313,9 +341,14 @@ function render(data) {
     const by = sort.key === "saved" ? a.saved - b.saved : sort.key === "size" ? a.size - b.size : a.time - b.time;
     return (sort.descending ? -by : by) || b.time - a.time;
   });
+  const nodes = rows.length ? rows.map((row) => row.node) : [el("tr", {}, [el("td", { colSpan: 6, className: "none",
+    textContent: filter.kind === "photo" ? "No photos deleted yet." : "No videos compressed or deleted yet." })])];
   sections.push(el("h2", { textContent: "History" }),
-    el("p", { className: "muted caption", textContent: "Everything compressed or deleted here. A compressed video and what became of its original share one row. Click When, Saved or Size to sort." }),
-    table([sortHeader("When", "when"), sortHeader("Saved", "saved", "number"), sortHeader("Size", "size"), ["What happened"], ["Item"], ["Details"]], rows.map((row) => row.node)));
+    el("div", { className: "historybar" }, [
+      el("p", { className: "muted caption", textContent: "Everything compressed or deleted here. A compressed video and what became of its original share one row. Click When, Saved or Size to sort." }),
+      kindButtons(),
+    ]),
+    table([sortHeader("When", "when"), sortHeader("Saved", "saved", "number"), sortHeader("Size", "size"), ["What happened"], ["Item"], ["Details"]], nodes));
   return sections;
 }
 

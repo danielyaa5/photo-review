@@ -45,8 +45,9 @@ is uploaded anywhere.
 |---|---|---|
 | ![The library view, largest first](docs/screenshot-library.png) | ![The compress dialog with a per-video size estimate](docs/screenshot-shrink.png) | ![The savings page](docs/screenshot-savings.png) |
 
-The screenshots use made-up data. The pictures in them and in the demo are free placeholder photos from
-[Lorem Picsum](https://picsum.photos), which draws on [Unsplash](https://unsplash.com/license).
+The library and compress screenshots use made-up data; the Savings one is the author's own history. The pictures
+in those two screenshots and in the demo are free placeholder photos from [Lorem Picsum](https://picsum.photos),
+which draws on [Unsplash](https://unsplash.com/license).
 
 ## How compressing works
 

@@ -30,6 +30,40 @@
   button.primary { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; font-weight: 600; }
   select { border: 1px solid var(--line); background: var(--card); border-radius: 7px; padding: 6px 8px; }
 
+  /* The three sources down the left. They stay the same three however many folders are added. */
+  #app { display: flex; min-height: 100vh; }
+  #sources { position: sticky; top: 0; align-self: flex-start; height: 100vh; width: 186px; flex: none; padding: 18px 10px; background: var(--card); border-right: 1px solid var(--line); }
+  #sources .brand { display: flex; align-items: center; gap: 8px; font-weight: 650; font-size: 15px; margin: 2px 8px 20px; }
+  #sources .brand img { width: 24px; height: 24px; }
+  #sources .group { font-size: 11px; letter-spacing: .05em; color: var(--muted); margin: 0 9px 6px; }
+  #sources button { display: flex; align-items: center; gap: 9px; width: 100%; border: 0; background: none; text-align: left; padding: 8px 9px; margin: 2px 0; border-radius: 8px; }
+  #sources button:hover { background: var(--bg); }
+  #sources button[aria-current="page"] { background: color-mix(in srgb, var(--accent) 13%, transparent); color: var(--accent); font-weight: 600; }
+  #sources svg, #folders svg { flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  #sources svg { width: 18px; height: 18px; }
+  #content { flex: 1; min-width: 0; }
+  /* What each view shows: the library or an opened folder, or a source's list of folders. */
+  body[data-view="folders"] :is(#guide, #guideshow, #progress, .filters, #grid, #more, #fresh, #summary) { display: none !important; }
+  body:not([data-view="folders"]) #folders { display: none; }
+  body:not([data-view="photos"]) #archive { display: none !important; }
+  #folderback { margin: 0 0 8px; text-decoration: none; }
+  #viewhint { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+  #folders .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 2px 0 16px; color: var(--muted); }
+  #folders .empty { min-height: 340px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 28px; }
+  #folders .empty svg { width: 40px; height: 40px; color: var(--muted); }
+  #folders .empty h2 { margin: 0; font-size: 18px; }
+  #folders .empty p { max-width: 380px; margin: 0 0 6px; color: var(--muted); }
+  #folders .list { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  #folders .row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+  #folders .row + .row { border-top: 1px solid var(--line); }
+  #folders .open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; border: 0; background: none; text-align: left; padding: 4px; }
+  #folders .open svg { width: 26px; height: 26px; color: var(--accent); }
+  #folders .open b { display: block; font-size: 14px; }
+  #folders .open small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; overflow-wrap: anywhere; }
+  #folders .total { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  #folders .missing .total { color: var(--danger); }
+  #folders .remove { border: 0; background: none; color: var(--muted); padding: 4px 8px; font-size: 18px; line-height: 1; }
+  #folders .hint { color: var(--muted); font-size: 12px; margin: 10px 2px 0; }
   header { padding: 20px 20px 12px; max-width: 1500px; margin: 0 auto; }
   h1 { margin: 0 0 2px; font-size: 20px; display: flex; align-items: center; gap: 8px; }
   h1 img { width: 28px; height: 28px; }
@@ -96,7 +130,7 @@
   #more { display: block; margin: 22px auto 0; padding: 9px 22px; }
   .notice { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; max-width: 620px; }
 
-  #bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line); padding: 12px 20px; display: none; align-items: center; gap: 12px; }
+  #bar { position: fixed; left: 186px; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line); padding: 12px 20px; display: none; align-items: center; gap: 12px; }
   #bar.on { display: flex; }
   #bar .count { font-weight: 650; }
   #bar .count.second { border-left: 1px solid var(--line); padding-left: 12px; }
@@ -165,6 +199,12 @@
 
   /* Narrow windows: stack the job rows and let the action bar wrap instead of running off the edge. */
   @media (max-width: 760px) {
+    /* Narrow, the sources become a row along the top. */
+    #app { flex-direction: column; }
+    #sources { position: static; align-self: stretch; width: auto; height: auto; display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--line); }
+    #sources .brand, #sources .group { display: none; }
+    #sources button { width: auto; margin: 0; }
+    #bar { left: 0; }
     header { padding: 16px 14px 10px; }
     main { padding: 4px 14px 190px; }
     #match { margin-left: 0; flex-basis: 100%; }
@@ -186,9 +226,19 @@
   }
 </style>
 </head>
-<body>
+<body data-view="photos">
+<div id="app">
+<nav id="sources" aria-label="Sources">
+  <div class="brand"><img src="/icon.svg" alt="">Photo Review</div>
+  <div class="group">SOURCES</div>
+  <button data-source="photos" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="14" height="14" rx="2"/><path d="M7 3h12a2 2 0 0 1 2 2v12"/><circle cx="8.5" cy="10" r="1.5"/><path d="m17 16-4-4-7 7"/></svg>Apple Photos</button>
+  <button data-source="drive" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 19H8a6 6 0 1 1 5.7-7.9A4.5 4.5 0 1 1 17.5 19Z"/></svg>Google Drive</button>
+  <button data-source="local" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>Local Folder</button>
+</nav>
+<div id="content">
 <header>
-  <div class="top"><h1><img src="/icon.svg" alt="">Photo Review</h1><span class="links"><button id="guideshow" class="link" hidden>What the buttons do</button><a href="/stats">Savings and history</a></span></div>
+  <button id="folderback" class="link" hidden>‹ All folders</button>
+  <div class="top"><h1 id="title">Apple Photos</h1><span class="links"><button id="guideshow" class="link" hidden>What the buttons do</button><a href="/stats">Savings and history</a></span></div>
   <div id="summary">Loading…</div>
   <div id="fresh" hidden><span id="freshtext"></span> <button id="update" class="link">Measure again</button></div>
   <div id="updatebar" class="notice" hidden><span id="updatetext"></span> <a id="updatelink" href="https://github.com/danielyaa5/photo-review/releases/latest" target="_blank" rel="noopener noreferrer">Download it</a> · <button id="updatelater" class="link">Not now</button></div>
@@ -207,7 +257,7 @@
         <div><b>Compress</b><p>Makes a much smaller copy: videos are re-encoded, RAW and JPEG photos become HEIC, and Live Photos keep just the still. The original stays until you delete it.</p></div>
       </div>
     </div>
-    <p class="foot"><span>Pick what you want on each item, then press the button that appears at the bottom. macOS asks you to confirm before anything is deleted, and deleted items stay in Recently Deleted for 30 days.</span><button id="guidehide" class="link">Hide</button></p>
+    <p class="foot"><span id="guidefoot">Pick what you want on each item, then press the button that appears at the bottom. macOS asks you to confirm before anything is deleted, and deleted items stay in Recently Deleted for 30 days.</span><button id="guidehide" class="link">Hide</button></p>
   </section>
   <div id="progress"><div></div></div>
   <div class="filters">
@@ -221,6 +271,7 @@
     <span id="match"></span>
     <button id="bulkopen">Pick many…</button>
   </div>
+  <p id="viewhint" hidden></p>
 </header>
 
 <main>
@@ -230,9 +281,15 @@
     <p id="jnote" hidden></p>
     <div id="joblist"></div>
   </section>
+  <section id="folders" aria-live="polite">
+    <div class="head"><span id="foldersub"></span><button id="addfolder" class="primary" hidden>Add folder…</button></div>
+    <div id="folderlist"></div>
+  </section>
   <div id="grid"></div>
   <button id="more" hidden>Show more</button>
 </main>
+</div>
+</div>
 
 <div id="bar">
   <span class="count" id="shrinkcount"></span>
@@ -246,7 +303,7 @@
 <div id="shrink" class="overlay">
   <div class="dialog" role="dialog" aria-labelledby="stitle">
     <h2 id="stitle">Compress videos</h2>
-    <p>Each one is downloaded from iCloud at full quality if it isn't on this Mac, made smaller here, and added to Photos as a new item with the same date, location, favorite and albums. Big videos can take hours.</p>
+    <p id="sintro">Each one is downloaded from iCloud at full quality if it isn't on this Mac, made smaller here, and added to Photos as a new item with the same date, location, favorite and albums. Big videos can take hours.</p>
     <!-- What happens to the originals comes first: it's what matters most. -->
     <div id="soriginals">
       <p id="sboth" hidden></p>
@@ -276,7 +333,7 @@
       <p id="sjpeg" hidden>JPEG photos become HEIC copies at the chosen resolution and quality, usually a half to three quarters of the size, keeping the HDR of iPhone photos. Re-compressing a JPEG loses a little quality, so keep High if in doubt.</p>
       <p id="srawmore" hidden>RAW copies are 10-bit HEIC at the chosen resolution and quality, developed with macOS's standard RAW settings. They aren't HDR, and editing them later is like editing any photo, not a RAW file. Their camera details, date and location carry over. A RAW photo with edits in Photos is skipped, because a copy made from the RAW file would lose them, and so is a RAW+JPEG pair.</p>
       <p id="shdr">HDR videos stay HDR, and HDR, ProRes and other 10-bit videos are always saved as HEVC so they keep their full colour depth.</p>
-      <p>Edits made in Photos are baked into the copies.</p>
+      <p id="sedits">Edits made in Photos are baked into the copies.</p>
       <p id="sdetails">Titles, captions and keywords are copied to each new item; people tags can't be. For that, macOS asks once whether Photo Review may control Photos. Without it, originals picked for deletion are kept.</p>
     </details>
     <details id="sroom">
@@ -325,8 +382,13 @@ const PAGE = 60;
 // "Shrink" in the code is the "Compress" button.
 // `work` is the latest shrink job for each video (asset id -> job).
 // `viewing` is the item open in the viewer, `current` its index in the list or -1.
-const state = { items: [], toShrink: new Map(), toBoth: new Map(), toDelete: new Map(), work: new Map(), kind: "all", year: "", match: 0, status: "starting", current: -1, viewing: null, busy: false, jobs: new Map(), gone: new Set(), downloading: false, queueLeft: 0, offline: false, measuredAt: null, updating: "" };
+const state = { source: "photos", folder: null, items: [], toShrink: new Map(), toBoth: new Map(), toDelete: new Map(), work: new Map(), kind: "all", year: "", match: 0, status: "starting", current: -1, viewing: null, busy: false, jobs: new Map(), gone: new Set(), downloading: false, queueLeft: 0, offline: false, measuredAt: null, updating: "" };
 const $ = (id) => document.getElementById(id);
+// Files in added folders have ids starting "file:"; everything else is in Photos.
+const isFileItem = (item) => Boolean(item && item.id.startsWith("file:"));
+// Files in Google Drive go to Google Drive's own trash, not this Mac's.
+const bin = (job) => job.drive ? "Google Drive's trash" : "the Trash";
+const SOURCES = { photos: "Apple Photos", drive: "Google Drive", local: "Local Folder" };
 // What a smaller copy can be made of: videos, RAW and JPEG photos, and Live Photos (their still alone).
 // Other photos are already compact and can only be deleted.
 const compressible = (item) => Boolean(item.video || item.raw || item.jpeg || item.live);
@@ -379,11 +441,13 @@ async function post(path, body) {
 }
 
 // Fetches `limit` items from `offset`; replaces the list unless appending.
-const SETTLED = ["ready", "denied", "limited"];
+const SETTLED = ["ready", "denied", "limited", "missing"];
 let loadCount = 0;
 async function load({ offset = 0, limit = PAGE, append = false } = {}) {
+  if (state.source !== "photos" && !state.folder) return renderFolders();
   const mine = ++loadCount;
   const params = new URLSearchParams({ offset, limit, kind: state.kind, year: state.year });
+  if (state.folder) { params.set("source", "folder"); params.set("folder", state.folder.path); }
   let data;
   try {
     data = await (await fetch("/api/items?" + params)).json();
@@ -410,7 +474,12 @@ async function load({ offset = 0, limit = PAGE, append = false } = {}) {
 function renderHeader(data) {
   const scanning = data.status === "scanning" || data.status === "starting";
   const updating = data.status === "updating";
-  $("summary").textContent = scanning
+  const folder = state.folder;
+  $("summary").textContent = folder
+    ? (data.status === "missing" ? folder.place
+      : scanning ? `${folder.place} · looking through it… ${data.scanned.toLocaleString()} of ${data.total.toLocaleString()} files`
+      : `${folder.place} · ${size(data.libraryBytes)} in ${data.libraryCount.toLocaleString()} item${data.libraryCount === 1 ? "" : "s"}${data.libraryCount > 1 ? ", largest first" : ""}.`)
+    : scanning
     ? `Measuring your library… ${data.scanned.toLocaleString()} of ${data.total.toLocaleString()} items (${size(data.libraryBytes)} so far)`
     : `${size(data.libraryBytes)} in ${data.libraryCount.toLocaleString()} items, largest first. Sizes include edits and Live Photo video.`;
   $("progress").hidden = !scanning && !updating;
@@ -419,7 +488,7 @@ function renderHeader(data) {
   state.measuredAt = data.measuredAt;
   state.updating = updating ? `Measuring again… ${data.scanned.toLocaleString()} of ${data.total.toLocaleString()} items checked.` : "";
   renderFreshness();
-  $("match").textContent = data.matchCount ? `${data.matchCount.toLocaleString()} items · ${size(data.matchBytes)}` : "";
+  $("match").textContent = data.matchCount ? `${data.matchCount.toLocaleString()} item${data.matchCount === 1 ? "" : "s"} · ${size(data.matchBytes)}` : "";
   document.querySelector('#kinds [data-kind="raw"]').hidden = !data.rawCount && state.kind !== "raw";
 
   const select = $("year");
@@ -435,6 +504,7 @@ function renderHeader(data) {
     denied: "Photo Review doesn't have access to your Photos library. Turn it on in System Settings → Privacy & Security → Photos, then quit and reopen Photo Review.",
     limited: "Photo Review only has access to selected photos. Give it full access in System Settings → Privacy & Security → Photos, then quit and reopen Photo Review.",
     starting: "Waiting for permission. Look for a dialog from Photo Review asking to access your Photos library and choose Allow.",
+    missing: "This folder isn't there right now. If it's on an external drive, plug the drive in and open the folder again.",
   };
   notice.hidden = !messages[data.status];
   notice.textContent = messages[data.status] || "";
@@ -446,7 +516,9 @@ function renderFreshness() {
   const known = state.updating || state.measuredAt;
   $("fresh").hidden = !known;
   if (!known) return;
-  $("freshtext").textContent = state.updating || `Measured ${ago(Date.now() / 1000 - state.measuredAt)}. Changes made in Photos since then aren't shown.`;
+  $("freshtext").textContent = state.updating || (state.folder
+    ? `Looked through ${ago(Date.now() / 1000 - state.measuredAt)}. Changes made in Finder since then aren't shown.`
+    : `Measured ${ago(Date.now() / 1000 - state.measuredAt)}. Changes made in Photos since then aren't shown.`);
   $("update").hidden = Boolean(state.updating);
 }
 // How long ago, in words: "just now", "25 minutes ago", "3 hours ago", "2 days ago".
@@ -470,7 +542,7 @@ function renderGrid() {
       both.onclick = () => toggle("toBoth", item);
       const remove = el("button", { className: "pickdelete" });
       remove.onclick = () => toggle("toDelete", item);
-      const reveal = el("button", { className: "reveal", textContent: "Open in Photos" });
+      const reveal = el("button", { className: "reveal", textContent: isFileItem(item) ? "Show in Finder" : "Open in Photos" });
       reveal.onclick = () => openInPhotos(item);
       const picture = el("img", { loading: "lazy", alt: "", src: "/thumb?size=480&id=" + encodeURIComponent(item.id) });
       // One more try if a thumbnail fails, since Photos is sometimes slow to produce one.
@@ -481,12 +553,13 @@ function renderGrid() {
       };
       const thumb = el("div", { className: "thumb" }, [
         picture,
-        ...(item.video ? [el("span", { className: "play" }), el("span", { className: "badge", textContent: duration(item.dur) })] : []),
+        // A file only in Google Drive has no length until it's downloaded.
+        ...(item.video ? [el("span", { className: "play" }), ...(item.dur > 0 ? [el("span", { className: "badge", textContent: duration(item.dur) })] : [])] : []),
         el("span", { className: "chip", hidden: true }),
         el("div", { className: "work", hidden: true }, [el("span"), el("div", { className: "line" }, [el("div")])]),
       ]);
       thumb.onclick = () => view(index);
-      const details = [item.date || "No date", `${item.w}×${item.h}`, ...(item.fav ? ["♥"] : []), ...(item.tags || [])].join(" · ");
+      const details = [item.date || "No date", ...(item.w > 0 ? [`${item.w}×${item.h}`] : []), ...(item.fav ? ["♥"] : []), ...(item.tags || [])].join(" · ");
       const card = el("div", { className: "card" }, [
         thumb,
         el("div", { className: "info" }, [
@@ -528,15 +601,15 @@ function tileWork(job, item) {
   }
   switch (job.state) {
     case "queued": return { text: "Waiting to be compressed", busy: true };
-    case "downloading": return { text: percent >= 1 ? `Downloading · ${percent}%` : "Downloading from iCloud…", progress: job.progress, busy: true };
+    case "downloading": return { text: job.file ? "Downloading from Google Drive…" : percent >= 1 ? `Downloading · ${percent}%` : "Downloading from iCloud…", progress: job.progress, busy: true };
     case "encoding": return { text: `Compressing · ${percent}%`, progress: job.progress, busy: true };
-    case "saving": return { text: "Adding the copy to Photos", busy: true };
+    case "saving": return { text: job.file ? "Saving the copy" : "Adding the copy to Photos", busy: true };
     case "done":
       if (job.copyDeleted) return earlier;
       if (!job.newItem || job.originalDeleted) return null;
       // While its deletion is waiting on the macOS confirmation, the original is spoken for.
       // Originals are deleted in one go when the queue is empty; until then this one just waits.
-      if (job.deletion === "pending") return { text: state.queueLeft ? "Smaller copy ready · original deleted when the queue finishes" : "Smaller copy ready · confirm the deletion", busy: true };
+      if (job.deletion === "pending") return { text: state.queueLeft ? `Smaller copy ready · original ${job.file ? `to ${bin(job)}` : "deleted"} when the queue finishes` : "Smaller copy ready · confirm the deletion", busy: true };
       return shrunk(job.newBytes);
     case "failed": return { text: "Couldn't be compressed" };
     case "skipped": return { text: "Already small enough" };
@@ -634,7 +707,7 @@ function toggle(which, item) {
 
 async function openInPhotos(item) {
   const result = await post("/api/reveal", { id: item.id });
-  if (!result.ok) toast("Couldn't open it in Photos: " + result.error);
+  if (!result.ok) toast((isFileItem(item) ? "Couldn't show it in Finder: " : "Couldn't open it in Photos: ") + result.error);
 }
 
 // Viewer
@@ -644,7 +717,15 @@ function view(index, item = state.items[index]) {
   const stage = $("stage");
   const id = encodeURIComponent(item.id);
   const poster = "/thumb?size=1600&id=" + id;
-  if (item.video) {
+  $("vreveal").textContent = isFileItem(item) ? "Show in Finder" : "Open in Photos";
+  if (item.video && isFileItem(item)) {
+    // A file plays from where it is; one only in Google Drive downloads as it plays.
+    const note = el("p", { className: "loading", textContent: (item.tags || []).includes("in the cloud") ? "Downloading the video from Google Drive…" : "Loading the video…" });
+    const video = el("video", { controls: true, autoplay: true, poster, src: "/video?id=" + id });
+    video.onloadeddata = () => note.remove();
+    video.onerror = () => { note.textContent = "This video can't be played here. Use Show in Finder to open it."; video.removeAttribute("controls"); };
+    stage.replaceChildren(el("div", { className: "player" }, [video, note]));
+  } else if (item.video) {
     // Videos that live only in iCloud take a few seconds while Photos fetches a smaller copy.
     const busy = "Photos fetches one thing from iCloud at a time, and it's busy downloading an original to compress. Previews of iCloud-only videos have to wait until that's done.";
     const note = el("p", { className: "loading", textContent: state.downloading ? busy : "Getting the video from Photos… this can take a few seconds if it's only in iCloud." });
@@ -662,7 +743,7 @@ function renderViewerBar() {
   const item = state.viewing;
   const place = state.current >= 0 ? ` · ${state.current + 1} of ${state.match.toLocaleString()}` : "";
   $("vsize").textContent = size(item.bytes);
-  $("vmeta").textContent = ` · ${item.date || "No date"} · ${item.name}${item.video ? " · " + duration(item.dur) : ""}${place}${item.copy ? ` · already compressed to ${size(item.copy.bytes)}, original not deleted` : ""}${item.shrunkFrom != null ? ` · a compressed copy${item.shrunkFrom ? ", was " + size(item.shrunkFrom) : ""}` : ""}`;
+  $("vmeta").textContent = ` · ${item.date || "No date"} · ${item.name}${item.video && item.dur > 0 ? " · " + duration(item.dur) : ""}${place}${item.copy ? ` · already compressed to ${size(item.copy.bytes)}, original not deleted` : ""}${item.shrunkFrom != null ? ` · a compressed copy${item.shrunkFrom ? ", was " + size(item.shrunkFrom) : ""}` : ""}`;
   const busy = isBusy(item.id);
   const shrunk = shrunkAlready(item);
   $("vshrink").hidden = !compressible(item) || shrunk;
@@ -713,7 +794,7 @@ async function deletePicked() {
   const result = await post("/api/delete", { ids: doomed.map((item) => item.id) });
   state.busy = false;
   if (result.ok) {
-    toast(`Moved ${doomed.length} item${doomed.length === 1 ? "" : "s"} (${size(bytes)}) to Recently Deleted.`);
+    toast(`Moved ${doomed.length} item${doomed.length === 1 ? "" : "s"} (${size(bytes)}) to ${!doomed.some(isFileItem) ? "Recently Deleted" : state.source === "drive" ? "Google Drive's trash" : "the Trash"}.`);
     for (const item of doomed) state.toDelete.delete(item.id);
     await load({ limit: Math.max(PAGE, state.items.length) });
   } else {
@@ -809,6 +890,8 @@ function preview(item, options) {
     const [low, high] = JPEG_SHARE[options.quality];
     return { low: still * low * scale, high: Math.min(still * high * scale, item.bytes) };
   }
+  // A video only in Google Drive has no length or size in pixels until it's downloaded.
+  if (!(item.dur > 0 && item.w > 0)) return { unknown: true };
   const cap = Number(options.fps);
   const low = estimate(item, options, cap || 30), high = estimate(item, options, cap || 60);
   return low > item.bytes * 0.8 ? null : { low, high: Math.min(high, item.bytes) };
@@ -828,19 +911,30 @@ function renderEstimate() {
   // Items picked with Compress & delete lose their original either way; the tick box decides for the rest.
   const both = state.toBoth.size, plain = state.toShrink.size;
   const the = (items) => items.length === 1 ? countOf(items).slice(2) : countOf(items);
+  // Files in a folder: the copies go in its Compressed folder, and deleted originals go to the Trash.
+  const files = picked.some(isFileItem), drive = files && state.source === "drive";
+  const trash = drive ? "Google Drive's trash" : "the Trash", gone = files ? `moved to ${trash}` : "deleted";
+  $("sintro").textContent = !files
+    ? "Each one is downloaded from iCloud at full quality if it isn't on this Mac, made smaller here, and added to Photos as a new item with the same date, location, favorite and albums. Big videos can take hours."
+    : "Each one is made smaller on this Mac and saved as a new file in the Compressed folder inside this one, with the original's dates. The original stays where it is."
+      + (drive ? " Files only in Google Drive are downloaded first, and Google Drive for desktop uploads the copies: keep the originals until it has." : "");
+  $("sdetails").hidden = $("sedits").hidden = files;
+  $("sroom").hidden = files && !drive;
   $("sboth").hidden = both === 0;
-  $("sboth").textContent = `The original${both === 1 ? "" : "s"} of the ${the([...state.toBoth.values()])} picked with Compress & delete ${both === 1 ? "is" : "are"} deleted once the whole queue has finished.`;
+  $("sboth").textContent = `The original${both === 1 ? "" : "s"} of the ${the([...state.toBoth.values()])} picked with Compress & delete ${both === 1 ? "is" : "are"} ${gone} once the whole queue has finished.`;
   $("sdeleterow").hidden = plain === 0;
-  $("sdeletetext").textContent = both === 0 ? "Delete each original once its smaller copy is in Photos"
-    : `Delete the original${plain === 1 ? "" : "s"} of the other ${the([...state.toShrink.values()])} as well`;
+  $("sdeletetext").textContent = both === 0 ? (files ? `Move each original to ${trash} once its smaller copy is saved` : "Delete each original once its smaller copy is in Photos")
+    : `${files ? "Move" : "Delete"} the original${plain === 1 ? "" : "s"} of the other ${the([...state.toShrink.values()])}${files ? ` to ${trash}` : ""} as well`;
   const doomed = (item) => state.toBoth.has(item.id) || $("sdelete").checked;
   // Only originals that are deleted free anything; a kept one stays, and its copy uses space alongside it.
-  let originals = 0, copiesLow = 0, copiesHigh = 0, skipped = 0, deleting = 0, keeping = 0;
+  let originals = 0, copiesLow = 0, copiesHigh = 0, skipped = 0, deleting = 0, keeping = 0, unknown = 0, guessedVideos = false;
   let freedLow = 0, freedHigh = 0, laterLow = 0, laterHigh = 0;
   $("spreview").replaceChildren(...picked.map((item) => {
     const guess = preview(item, options);
     if (!guess) skipped++;
+    else if (guess.unknown) unknown++;
     else {
+      if (item.video) guessedVideos = true;
       originals += item.bytes;
       copiesLow += guess.low;
       copiesHigh += guess.high;
@@ -848,10 +942,10 @@ function renderEstimate() {
       else { keeping++; laterLow += item.bytes - guess.high; laterHigh += item.bytes - guess.low; }
     }
     // The app decides for real once it has the file; a 60 fps original near the limit can still be skipped then.
-    const unsure = guess && item.video && options.fps === "keep" && estimate(item, options, 60) > item.bytes * 0.8;
+    const unsure = guess && !guess.unknown && item.video && options.fps === "keep" && estimate(item, options, 60) > item.bytes * 0.8;
     return el("div", { className: "line" + (guess ? "" : " skip") }, [
       el("span", { className: "name", textContent: item.name, title: item.name }),
-      el("span", { textContent: !guess ? `${size(item.bytes)}, ${item.raw ? "has edits in Photos, so it's skipped" : item.live && !item.video ? "no motion to drop, so it's skipped" : "already this small"}` : `${size(item.bytes)} → ${range(guess.low, guess.high)}${unsure ? " (may be skipped)" : ""}${item.shrunkFrom != null ? " · already a compressed copy" : ""}${doomed(item) ? " · original deleted" : ""}` }),
+      el("span", { textContent: !guess ? `${size(item.bytes)}, ${item.raw ? "has edits in Photos, so it's skipped" : item.live && !item.video ? "no motion to drop, so it's skipped" : "already this small"}` : `${size(item.bytes)} → ${guess.unknown ? "known once it's downloaded" : range(guess.low, guess.high)}${unsure ? " (may be skipped)" : ""}${item.shrunkFrom != null ? " · already a compressed copy" : ""}${doomed(item) ? " · original deleted" : ""}` }),
     ]);
   }));
   $("stitle").textContent = `Compress ${countOf(picked)}`;
@@ -860,20 +954,23 @@ function renderEstimate() {
   if (deleting && !keeping) text += ` Once the queue has finished and ${deleting === 1 ? "the original is" : "the originals are"} deleted, that frees about ${range(freedLow, freedHigh)}.`;
   else if (deleting) text += ` Deleting the ${deleting === 1 ? "original" : `${deleting} originals`} set to go frees about ${range(freedLow, freedHigh)} once the queue has finished; the other ${keeping === 1 ? "original stays" : `${keeping} stay`} until you delete ${keeping === 1 ? "it" : "them"}.`;
   else if (keeping) text += ` The original${keeping === 1 ? " stays" : "s stay"} until you delete ${keeping === 1 ? "it" : "them"}, so nothing is freed yet; deleting ${keeping === 1 ? "it" : "them"} later frees about ${range(laterLow, laterHigh)}.`;
-  if (hasVideos && options.fps === "keep") text += " The higher figure applies to videos shot at 60 fps.";
+  if (guessedVideos && options.fps === "keep") text += " The higher figure applies to videos shot at 60 fps.";
+  if (unknown) text += ` ${unknown === 1 ? "One video is" : `${unknown} videos are`} only in Google Drive, so ${unknown === 1 ? "its copy's size is" : "their copies' sizes are"} known once ${unknown === 1 ? "it's" : "they're"} downloaded.`;
   if (hasRaw) text += " For RAW photos it depends on the camera.";
   if (skipped) text += ` ${skipped} will be skipped.`;
-  $("sestimate").textContent = text;
+  $("sestimate").textContent = text.trim();
   // Anything picked with Delete is dealt with from this dialog too, so the button says so.
   const deletes = state.toDelete.size, items = `${deletes} item${deletes === 1 ? "" : "s"}`;
   nothingToShrink = skipped === picked.length;
   $("salso").hidden = deletes === 0;
-  $("salso").textContent = `The ${deletes === 1 ? "item" : items} you picked with Delete (${size([...state.toDelete.values()].reduce((sum, item) => sum + item.bytes, 0))}) ${deletes === 1 ? "is" : "are"} deleted as soon as you press the button below.`;
+  $("salso").textContent = `The ${deletes === 1 ? "item" : items} you picked with Delete (${size([...state.toDelete.values()].reduce((sum, item) => sum + item.bytes, 0))}) ${deletes === 1 ? "is" : "are"} ${gone} as soon as you press the button below.`;
   // When macOS will ask, which differs with what was picked.
   const atEnd = picked.some(doomed);
-  $("sconfirm").textContent = deletes && atEnd ? "macOS asks you to confirm twice: when you press the button, for the items picked with Delete, and once the queue has finished, for the originals. Deleted items stay in Recently Deleted for 30 days."
-    : atEnd ? "macOS asks you to confirm once, when the whole queue has finished, not after each one. Deleted items stay in Recently Deleted for 30 days."
-    : deletes ? "macOS asks you to confirm when you press the button. Deleted items stay in Recently Deleted for 30 days."
+  const asker = files ? "Photo Review asks" : "macOS asks", them = picked.filter(doomed).length + deletes === 1 ? "it" : "them";
+  const kept = drive ? `You can restore ${them} from Google Drive's trash for 30 days.` : files ? `You can put ${them} back from the Trash until it's emptied.` : "Deleted items stay in Recently Deleted for 30 days.";
+  $("sconfirm").textContent = deletes && atEnd ? `${asker} you to confirm twice: when you press the button, for the items picked with Delete, and once the queue has finished, for the originals. ${kept}`
+    : atEnd ? `${asker} you to confirm once, when the whole queue has finished, not after each one. ${kept}`
+    : deletes ? `${asker} you to confirm when you press the button. ${kept}`
     : "Nothing is deleted: every original stays until you delete it.";
   $("sstart").textContent = !deletes ? "Start" : nothingToShrink ? `Delete ${items}` : `Start and delete ${items}`;
   $("sstart").disabled = nothingToShrink && deletes === 0;
@@ -935,18 +1032,19 @@ function jobStatus(job) {
       const progress = job.progress > 0
         ? `${percent} of ${size(job.originalBytes)}${left}`
         : `waiting for the first 1% of ${size(job.originalBytes)} (${waited} so far)`;
+      if (job.file) return "Downloading from Google Drive…";
       return "Getting the original from iCloud · " + progress + (job.message ? ". " + job.message : "");
     }
     case "encoding": return job.kind !== "photo" ? "Re-encoding · " + percent : job.item?.raw ? "Converting to 10-bit HEIC" : "Making the HEIC copy";
-    case "saving": return "Adding to Photos";
+    case "saving": return job.file ? "Saving the copy in the folder" : "Adding to Photos";
     case "done": {
       // "Smaller" rather than "saves": nothing is saved while the original is still there.
       const saved = `${size(job.originalBytes)} → ${size(job.newBytes)}, ${Math.round(100 * (1 - job.newBytes / job.originalBytes))}% smaller.`;
-      if (!job.newItem) return saved + " Test run: nothing was added to Photos.";
+      if (!job.newItem) return saved + (job.file ? " Test run: nothing was saved." : " Test run: nothing was added to Photos.");
       if (job.copyDeleted) return saved + " The smaller copy has since been deleted.";
-      if (job.originalDeleted) return saved + " Original deleted.";
+      if (job.originalDeleted) return saved + (job.file ? ` Original moved to ${bin(job)}.` : " Original deleted.");
       // macOS is asked once, for every original together, and only when nothing is left in the queue.
-      if (job.deletion === "pending") return saved + (state.queueLeft ? " Its original will be deleted at the end of the queue." : " Waiting for you to confirm in the Photo Review dialog.");
+      if (job.deletion === "pending") return saved + (state.queueLeft ? (job.file ? ` Its original goes to ${bin(job)} at the end of the queue.` : " Its original will be deleted at the end of the queue.") : " Waiting for you to confirm in the Photo Review dialog.");
       if (job.deletion === "kept") return saved + " Original kept: " + (job.message || "the deletion wasn't confirmed.");
       return saved + " Check the new copy, then delete the original.";
     }
@@ -962,8 +1060,8 @@ function renderJobs(jobs) {
   const doomed = jobs.filter((job) => job.deleteOriginal && !job.originalDeleted && (ACTIVE.includes(job.state) || job.deletion === "pending")).length;
   $("jnote").hidden = doomed === 0;
   $("jnote").textContent = left
-    ? `${doomed === 1 ? "1 original is" : doomed + " originals are"} set to be deleted. macOS asks you to confirm once, when the whole queue has finished (${left} still to go), not after each one.`
-    : `The queue has finished. macOS is asking you to confirm deleting ${doomed === 1 ? "1 original" : doomed + " originals"}: look for the Photo Review dialog.`;
+    ? `${doomed === 1 ? "1 original is" : doomed + " originals are"} set to be deleted. ${jobs.some((job) => job.file) ? "You're asked" : "macOS asks you"} to confirm once, when the whole queue has finished (${left} still to go), not after each one.`
+    : `The queue has finished. You're asked to confirm deleting ${doomed === 1 ? "1 original" : doomed + " originals"}: look for the Photo Review dialog.`;
   const listed = new Set(jobs.map((job) => job.id));
   for (const [id, row] of jobRows) {
     if (!listed.has(id)) { row.node.remove(); jobRows.delete(id); }
@@ -987,7 +1085,7 @@ function renderJobs(jobs) {
   for (const job of jobs) {
     let row = jobRows.get(job.id);
     if (!row) {
-      row = { status: el("div", { className: "status" }), note: el("div", { className: "note" }), bar: el("div"), action: el("button"), pick: el("button"), reveal: el("button", { textContent: "Open in Photos" }) };
+      row = { status: el("div", { className: "status" }), note: el("div", { className: "note" }), bar: el("div"), action: el("button"), pick: el("button"), reveal: el("button", { textContent: job.file ? "Show in Finder" : "Open in Photos" }) };
       row.reveal.onclick = () => openInPhotos(job.item);
       row.track = el("div", { className: "track" }, [row.bar]);
       row.node = el("div", { className: "job" }, [
@@ -1035,12 +1133,12 @@ async function pollJobs() {
     pollJobs.timer = setTimeout(pollJobs, 6000);
     return;
   }
-  let finished = 0, removed = 0;
+  let finished = 0, removed = 0, filesFinished = false;
   for (const job of jobs) {
     const before = state.jobs.get(job.id);
     // A copy has just arrived. Its original isn't picked for deletion by itself: that waits until the copy has been
     // checked, and is done with the queue's button or the row's.
-    if (job.state === "done" && job.newItem && !job.deleteOriginal && before && before !== "done") finished++;
+    if (job.state === "done" && job.newItem && !job.deleteOriginal && before && before !== "done") { finished++; filesFinished ||= job.file; }
     // An original deleted by the app itself drops out of the list, so the grid needs a refresh.
     if (job.originalDeleted && !state.gone.has(job.id)) {
       state.gone.add(job.id);
@@ -1070,7 +1168,7 @@ async function pollJobs() {
   if (state.viewing) renderViewerBar();
   // The app is answering again after a spell of not responding, so refresh the list too.
   if (state.offline && !state.viewing && !state.busy) await load({ limit: Math.max(PAGE, state.items.length) });
-  if (finished) toast(`${finished} smaller cop${finished === 1 ? "y is" : "ies are"} in Photos. Check ${finished === 1 ? "it" : "them"}, then pick the original${finished === 1 ? "" : "s"} for deletion in the queue.`);
+  if (finished) toast(`${finished} smaller cop${finished === 1 ? "y is" : "ies are"} ${filesFinished ? "saved in the folder" : "in Photos"}. Check ${finished === 1 ? "it" : "them"}, then pick the original${finished === 1 ? "" : "s"} for deletion in the queue.`);
   if (finished || removed) {
     if (!state.viewing && !state.busy) await load({ limit: Math.max(PAGE, state.items.length) });
     else renderBar();
@@ -1089,7 +1187,7 @@ async function poll() {
   else if (!SETTLED.includes(state.status)) poll.timer = setTimeout(poll, 2500);
 }
 $("update").onclick = async () => {
-  const result = await post("/api/update", {});
+  const result = await post("/api/update", state.folder ? { folder: state.folder.path } : {});
   if (!result.ok && result.error) toast(result.error);
   poll();
 };
@@ -1114,6 +1212,7 @@ async function bulkCandidates(minBytes) {
   let room = null;
   for (let offset = 0; ; offset += BULK_PAGE) {
     const params = new URLSearchParams({ offset, limit: BULK_PAGE, kind: state.kind, year: state.year, minBytes });
+    if (state.folder) { params.set("source", "folder"); params.set("folder", state.folder.path); }
     const data = await (await fetch("/api/items?" + params)).json();
     if (offset === 0) room = data.freeBytes ?? null;
     for (const item of data.items) found.set(item.id, item);
@@ -1164,7 +1263,7 @@ async function renderBulk() {
 }
 $("bulkopen").onclick = () => {
   const kinds = { all: "everything", video: "videos", photo: "photos", raw: "RAW photos" };
-  $("bscope").textContent = kinds[state.kind] + (state.year === "" ? "" : state.year === "0" ? " with no date" : ` from ${state.year}`);
+  $("bscope").textContent = kinds[state.kind] + (state.folder ? ` in ${state.folder.name}` : "") + (state.year === "" ? "" : state.year === "0" ? " with no date" : ` from ${state.year}`);
   $("bulk").classList.add("on");
   renderBulk();
 };
@@ -1203,6 +1302,143 @@ async function checkVersion() {
 }
 checkVersion();
 
+// Sources. Apple Photos is the library. Google Drive and Local Folder each list the folders added to them, and
+// opening one shows its photos and videos like the library. Which view was open is kept in this browser only.
+const PHOTOS_FOOT = "Pick what you want on each item, then press the button that appears at the bottom. macOS asks you to confirm before anything is deleted, and deleted items stay in Recently Deleted for 30 days.";
+const FILES_FOOT = "Pick what you want on each item, then press the button that appears at the bottom. Smaller copies go in a Compressed folder inside this one, and Photo Review asks before moving anything to the Trash.";
+const ICONS = {
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
+  add: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M12 10v6M9 13h6"/>',
+  cloud: '<path d="M17.5 19H8a6 6 0 1 1 5.7-7.9A4.5 4.5 0 1 1 17.5 19Z"/>',
+};
+// The icons are fixed strings, never anything from a file or folder name.
+function icon(paths) {
+  const holder = document.createElement("span");
+  holder.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${paths}</svg>`;
+  return holder.firstChild;
+}
+function setView() {
+  const view = state.source === "photos" ? "photos" : state.folder ? "folder" : "folders";
+  document.body.dataset.view = view;
+  for (const button of $("sources").querySelectorAll("button")) button.setAttribute("aria-current", button.dataset.source === state.source ? "page" : "false");
+  $("title").textContent = state.folder ? state.folder.name : SOURCES[state.source];
+  $("folderback").hidden = !state.folder;
+  $("guidefoot").textContent = state.source === "photos" ? PHOTOS_FOOT : FILES_FOOT;
+  document.querySelector("#bar .hint").textContent = state.source === "photos"
+    ? "Deleted items move to Recently Deleted in Photos for 30 days. iCloud space is freed when they leave it."
+    : state.source === "drive" ? "Deleted files go to Google Drive's trash, where you can restore them for 30 days."
+    : "Deleted files go to the Trash, where you can put them back until it's emptied.";
+  $("viewhint").hidden = !state.folder;
+  $("viewhint").textContent = state.source === "drive"
+    ? "Through Google Drive for desktop. Files only in the cloud download when you open or compress them."
+    : "Originals stay where they are until you choose to remove them. Smaller copies go in a Compressed folder inside this one.";
+  $("notice").hidden = true;
+}
+function switchTo(source, folder = null) {
+  if (state.busy) return;
+  if (state.viewing) closeViewer();
+  state.source = source;
+  state.folder = folder;
+  // Picks belong to the view they were made in.
+  for (const pick of PICKS) state[pick].clear();
+  state.kind = "all";
+  state.year = "";
+  for (const button of $("kinds").children) button.setAttribute("aria-pressed", button.dataset.kind === "all");
+  $("year").value = "";
+  state.items = [];
+  state.match = 0;
+  gridKey = null;
+  $("grid").replaceChildren();
+  $("more").hidden = true;
+  $("summary").textContent = "Loading…";
+  try { localStorage.setItem("view", JSON.stringify({ source, folder })); } catch (error) {}
+  setView();
+  renderBar();
+  window.scrollTo(0, 0);
+  load();
+}
+let folderCount = 0;
+async function renderFolders() {
+  clearTimeout(renderFolders.timer);
+  const mine = ++folderCount, source = state.source;
+  let data;
+  try {
+    data = await (await fetch("/api/folders?source=" + source)).json();
+  } catch (error) {
+    $("folderlist").replaceChildren(el("p", { className: "hint", textContent: "Photo Review isn't responding. Check that the app is still open." }));
+    return;
+  }
+  if (mine !== folderCount || state.source !== source || state.folder) return;
+  const drive = source === "drive", noDrive = drive && !data.drives.length;
+  $("foldersub").textContent = drive ? "Folders from Google Drive for desktop." : "Folders on your Mac and external drives.";
+  $("addfolder").hidden = noDrive || !data.folders.length;
+  $("addfolder").textContent = drive ? "Add Drive folder…" : "Add folder…";
+  if (noDrive) {
+    const get = el("button", { className: "primary", textContent: "Get Google Drive for desktop" });
+    get.onclick = () => window.open("https://www.google.com/drive/download/", "_blank", "noopener");
+    $("folderlist").replaceChildren(el("div", { className: "empty" }, [
+      icon(ICONS.cloud), el("h2", { textContent: "Google Drive for desktop isn't on this Mac" }),
+      el("p", { textContent: "Install it and sign in, and your Drive shows up in Finder. Then choose a folder from it here to see its largest photos and videos." }), get,
+    ]));
+  } else if (!data.folders.length) {
+    const add = el("button", { className: "primary", textContent: drive ? "Choose Drive folder…" : "Add folder…" });
+    add.onclick = addFolder;
+    $("folderlist").replaceChildren(el("div", { className: "empty" }, [
+      icon(drive ? ICONS.cloud : ICONS.add), el("h2", { textContent: drive ? "Choose a Google Drive folder" : "Add your first folder" }),
+      el("p", { textContent: drive ? "Choose a folder from Google Drive in Finder to see its largest photos and videos. Files only in the cloud aren't downloaded until you open or compress them." : "See your largest photos and videos, then choose what to compress." }), add,
+    ]));
+  } else {
+    const rows = data.folders.map((folder) => {
+      const open = el("button", { className: "open" }, [icon(ICONS.folder), el("span", {}, [el("b", { textContent: folder.name }), el("small", { textContent: folder.place })])]);
+      open.onclick = () => switchTo(source, { path: folder.path, name: folder.name, place: folder.place });
+      const remove = el("button", { className: "remove", textContent: "×", title: "Take it off this list. Its files stay where they are." });
+      remove.setAttribute("aria-label", `Take ${folder.name} off this list`);
+      remove.onclick = () => removeFolder(folder);
+      const total = folder.status === "missing" ? "Not connected"
+        : folder.status === "scanning" ? (folder.total ? `Looking through… ${folder.scanned.toLocaleString()} of ${folder.total.toLocaleString()}` : "Looking through…")
+        : `${folder.count.toLocaleString()} item${folder.count === 1 ? "" : "s"} · ${size(folder.bytes)}`;
+      return el("div", { className: "row" + (folder.status === "missing" ? " missing" : "") }, [open, el("span", { className: "total", textContent: total }), remove]);
+    });
+    $("folderlist").replaceChildren(el("div", { className: "list" }, rows),
+      el("p", { className: "hint", textContent: "Open a folder to see what's in it. Taking one off this list leaves its files where they are." }));
+  }
+  // While a folder is still being looked through, its count keeps changing.
+  if (data.folders.some((folder) => folder.status === "scanning")) renderFolders.timer = setTimeout(renderFolders, 1500);
+}
+async function addFolder() {
+  const result = await post("/api/folders/add", { source: state.source });
+  if (!result.ok) { if (result.error) toast(result.error); return; }
+  renderFolders();
+}
+async function removeFolder(folder) {
+  const result = await post("/api/folders/remove", { path: folder.path });
+  if (!result.ok) return toast(result.error || "Couldn't take it off the list.");
+  toast(`${folder.name} is off the list. Its files haven't been touched.`);
+  renderFolders();
+}
+$("addfolder").onclick = addFolder;
+$("folderback").onclick = () => switchTo(state.source);
+$("sources").onclick = (event) => {
+  const button = event.target.closest("button[data-source]");
+  if (button) switchTo(button.dataset.source);
+};
+// Opens where the person left off, unless that folder has since been taken off its list.
+async function restoreView() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem("view") || "null"); } catch (error) {}
+  if (saved && SOURCES[saved.source]) {
+    state.source = saved.source;
+    if (saved.folder && saved.source !== "photos") {
+      try {
+        const data = await (await fetch("/api/folders?source=" + saved.source)).json();
+        if (data.folders.some((folder) => folder.path === saved.folder.path)) state.folder = saved.folder;
+      } catch (error) {}
+    }
+  }
+  setView();
+  poll();
+}
+
 // The guide to the three buttons can be put away. The choice is kept in this browser only, and the
 // page works the same if the browser won't keep it.
 function showGuide(show) {
@@ -1215,7 +1451,7 @@ $("guideshow").onclick = () => showGuide(true);
 try { if (localStorage.getItem("guide") === "hidden") showGuide(false); } catch (error) {}
 // Keep "measured 5 minutes ago" honest while the page sits open.
 setInterval(renderFreshness, 60000);
-poll();
+restoreView();
 </script>
 </body>
 </html>

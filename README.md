@@ -63,6 +63,15 @@ Photo Review > Check for Updates Automatically turns off.
   folder for each year. Each copy is checked against the original's size, and the items are deleted only after
   that, with one confirmation once the queue is done. The files keep their own camera details, but titles,
   captions, keywords and albums live in Photos and aren't copied.
+- **Folders and Google Drive too.** Besides Apple Photos, the sidebar has Google Drive and Local Folder. Add a
+  folder on your Mac or an external drive, or one from Google Drive for desktop (which shows your Drive in Finder),
+  and its photos and videos are listed largest first with the same three buttons. Copies are saved in a
+  `Compressed` folder inside it, with the original's dates, and the originals stay where they are; deleting moves
+  files to the Trash after Photo Review asks (files in Google Drive go to Google Drive's trash instead, where they
+  can be restored for 30 days). Files that are only
+  in Google Drive are listed without being downloaded, and download when you open or compress them. There's no
+  Google sign-in: Drive is read through Google Drive for desktop. Taking a folder off the list leaves its files
+  alone.
 - **Says when it's done.** A notification when the queue finishes, saying what was compressed and whether a
   deletion is waiting for you to confirm, and a Dock badge counting what is left.
 - **Tells you about new versions.** When a newer release is out, a note at the top of the window says so, and

@@ -105,7 +105,7 @@ async function openInPhotos(id) {
   } catch (error) {
     result = { ok: false, error: "Photo Review isn't responding." };
   }
-  if (!result.ok) toast("Couldn't open it in Photos: " + result.error);
+  if (!result.ok) toast((isFile(id) ? "Couldn't show it in Finder: " : "Couldn't open it in Photos: ") + result.error);
 }
 // Asks Photos to delete the original of a finished shrink. macOS shows its own confirmation first.
 async function deleteOriginal(event, button) {
@@ -120,7 +120,7 @@ async function deleteOriginal(event, button) {
     result = { ok: false, error: "Photo Review isn't responding." };
   }
   if (result.ok) {
-    toast(`Moved the original of ${event.name} (${size(event.originalBytes)}) to Recently Deleted.`);
+    toast(`Moved the original of ${event.name} (${size(event.originalBytes)}) to ${!isFile(event.assetId) ? "Recently Deleted" : inDrive(event.assetId) ? "Google Drive's trash" : "the Trash"}.`);
   } else {
     toast(result.error || "Nothing was deleted.");
     button.disabled = false;
@@ -150,6 +150,10 @@ function span(seconds) {
   return minutes < 60 ? minutes + " min" : `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
 }
 const when = (time) => new Date(time).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+// Files in added folders have ids starting "file:".
+const isFile = (id) => String(id || "").startsWith("file:");
+// Google Drive for desktop keeps its files under ~/Library/CloudStorage/GoogleDrive-<account>.
+const inDrive = (id) => isFile(id) && String(id).includes("/Library/CloudStorage/GoogleDrive-");
 const plural = (count, word) => `${count.toLocaleString()} ${word}${count === 1 ? "" : "s"}`;
 // Compressions recorded before RAW photos could be compressed were all of videos.
 const kindOf = (e) => e.kind || "video";
@@ -266,13 +270,21 @@ function render(data) {
     ...(replaced.length ? [`${size(savedByShrinking)} from compressing ${things(replaced)}`] : []),
     ...(outright.length ? [`${size(savedByDeleting)} from deleting ${plural(outright.length, "item")} outright`] : []),
   ];
+  // Where deleted things wait, by where they came from: Photos, a folder on this Mac, or Google Drive.
+  const fromPhotos = deletedItems.some((item) => !isFile(item.id)), fromDrive = deletedItems.some((item) => inDrive(item.id));
+  const fromFolders = deletedItems.some((item) => isFile(item.id) && !inDrive(item.id));
+  const bins = [
+    ...(fromPhotos || (!fromFolders && !fromDrive) ? ["Deleted items sit in Recently Deleted for 30 days, and iCloud space is freed when they leave it."] : []),
+    ...(fromFolders ? ["Deleted files sit in the Trash until it's emptied."] : []),
+    ...(fromDrive ? ["Files deleted from Google Drive sit in Google Drive's trash for 30 days."] : []),
+  ];
   const hero = el("div", { className: "hero" }, [
     el("div", { className: "label", textContent: net >= 0 ? "Space saved so far" : "Library has grown by" }),
     el("div", { className: "value", textContent: size(net) }),
     el("div", { className: "note", textContent:
       (parts.length ? parts.join(", plus ") + ". " : "") +
       (waiting.length ? `${plural(waiting.length, "smaller copy").replace("copys", "copies")} (${size(waitingCopies)}) ${waiting.length === 1 ? "sits" : "sit"} next to ${waiting.length === 1 ? "its original" : "their originals"} for now; deleting ${waiting.length === 1 ? "that original" : "those originals"} would free another ${size(waitingBytes)}. ` : "") +
-      "Deleted items sit in Recently Deleted for 30 days, and iCloud space is freed when they leave it." }),
+      bins.join(" ") }),
   ]);
 
   const outcomes = ["done", "failed", "skipped", "cancelled"].map((o) => [o, shrinks.filter((e) => e.outcome === o).length]).filter(([, n]) => n);
@@ -308,7 +320,9 @@ function render(data) {
     }
     const copyGone = gone(e.newId, e.copyExists), originalGone = gone(e.assetId, e.originalExists);
     const counted = replaced.includes(e);
-    const fate = copyGone ? "Smaller copy deleted" + on(e.newId) : originalGone ? "Original deleted" + on(e.assetId) : "Original still in the library";
+    // Files in added folders go to the Trash and stay in their folder; Photos items go to Recently Deleted.
+    const file = isFile(e.assetId);
+    const fate = copyGone ? "Smaller copy deleted" + on(e.newId) : originalGone ? (file ? (inDrive(e.assetId) ? "Original moved to Google Drive's trash" : "Original moved to the Trash") : "Original deleted") + on(e.assetId) : file ? "Original still in the folder" : "Original still in the library";
     // Space is only saved once the original is gone, and not at all if the copy was deleted instead.
     const difference = e.originalBytes - e.newBytes;
     const figure = `${size(difference)} (${e.originalBytes ? Math.round(100 * difference / e.originalBytes) : 0}%)`;
@@ -323,8 +337,8 @@ function render(data) {
     const remove = el("button", { className: "danger", textContent: "Delete original" });
     remove.onclick = () => deleteOriginal(e, remove);
     const links = el("div", { className: "links" }, [
-      ...(e.copyExists ? [photosButton("Open copy in Photos", e.newId)] : []),
-      ...(e.originalExists ? [photosButton("Open original in Photos", e.assetId)] : []),
+      ...(e.copyExists ? [photosButton(file ? "Show copy in Finder" : "Open copy in Photos", e.newId)] : []),
+      ...(e.originalExists ? [photosButton(file ? "Show original in Finder" : "Open original in Photos", e.assetId)] : []),
       ...(e.originalExists && e.copyExists ? [remove] : []),
     ]);
     rows.push({ time: Date.parse(e.time), saved: copyGone || (originalGone && !counted) ? 0 : difference, size: e.originalBytes, node: el("tr", {}, [

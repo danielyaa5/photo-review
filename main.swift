@@ -4,6 +4,7 @@ import CoreImage
 import ImageIO
 import Network
 import Photos
+import QuickLookThumbnailing
 import UniformTypeIdentifiers
 import UserNotifications
 import VideoToolbox
@@ -380,6 +381,11 @@ final class Library {
         // Left running for more than a day, the app refreshes itself the next time someone looks.
         if stale { update() }
 
+        return state.merging(Library.listing(all, kind: kind, year: year, minBytes: minBytes, offset: offset, limit: limit)) { $1 }
+    }
+
+    /// One page of `all`, largest first, with the totals the page shows. Folders list their files the same way.
+    static func listing(_ all: [Item], kind: String, year: Int?, minBytes: Int64, offset: Int, limit: Int) -> [String: Any] {
         var years: [Int: (bytes: Int64, count: Int)] = [:]
         var libraryBytes: Int64 = 0
         var rawCount = 0
@@ -396,7 +402,7 @@ final class Library {
         }.sorted { $0.bytes != $1.bytes ? $0.bytes > $1.bytes : $0.id < $1.id }
         let page = matches.dropFirst(max(0, offset)).prefix(max(0, limit))
 
-        var result = state
+        var result: [String: Any] = [:]
         result["libraryBytes"] = libraryBytes
         result["libraryCount"] = all.count
         // The page only offers a RAW filter when there is something for it to show.
@@ -581,6 +587,405 @@ final class Library {
 func jpegData(_ image: NSImage) -> Data? {
     guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
     return NSBitmapImageRep(cgImage: cgImage).representation(using: .jpeg, properties: [.compressionFactor: 0.8])
+}
+
+// MARK: - Folders
+
+/// Photos and videos in folders the person adds: on this Mac, on an external drive, or in Google Drive through
+/// Google Drive for desktop, which puts a Drive in Finder. Their items work like Photos items, with ids of the
+/// form "file:" and the path, so the two kinds never clash.
+final class Folders {
+    struct Folder {
+        let path: String
+        /// "local" or "drive".
+        let source: String
+    }
+
+    /// What is known about one folder's contents.
+    final class Scan {
+        /// scanning, ready, or missing (not there now, such as a drive that isn't plugged in).
+        var status = "scanning"
+        var scanned = 0
+        var total = 0
+        var items: [String: Item] = [:]
+        var measuredAt: Date?
+    }
+
+    static let prefix = "file:"
+    /// The folder inside each added folder where smaller copies go.
+    static let copies = "Compressed"
+    private let lock = NSLock()
+    private var folders: [Folder] = []
+    private var scans: [String: Scan] = [:]
+    private let file = dataFile("folders.json", flag: "--folders")
+    /// Tests can let files under this folder go to the Trash without the question. Nothing else can skip it.
+    private let trashWithoutAsking: String? = {
+        let arguments = CommandLine.arguments
+        guard let flag = arguments.firstIndex(of: "--trash-without-asking-under"), flag + 1 < arguments.count else { return nil }
+        return URL(fileURLWithPath: arguments[flag + 1]).standardizedFileURL.path
+    }()
+
+    init() {
+        guard let data = try? Data(contentsOf: file), let list = (try? JSONSerialization.jsonObject(with: data)) as? [[String: String]]
+        else { return }
+        folders = list.compactMap { entry in
+            guard let path = entry["path"], let source = entry["source"] else { return nil }
+            return Folder(path: path, source: source)
+        }
+    }
+
+    private func save() {
+        lock.lock()
+        let list = folders.map { ["path": $0.path, "source": $0.source] }
+        lock.unlock()
+        if let data = try? JSONSerialization.data(withJSONObject: list) { try? data.write(to: file, options: .atomic) }
+    }
+
+    static func isFile(_ id: String) -> Bool { id.hasPrefix(prefix) }
+    /// One spelling for each path (macOS writes some both with and without /private), so a folder is known once.
+    static func normal(_ path: String) -> String { URL(fileURLWithPath: path).standardizedFileURL.path }
+    static func id(_ url: URL) -> String { prefix + url.standardizedFileURL.path }
+    static func url(_ id: String) -> URL? { isFile(id) ? URL(fileURLWithPath: String(id.dropFirst(prefix.count))) : nil }
+
+    /// Google Drive for desktop's folders in Finder, one for each signed-in account. `--drive-root PATH` stands in
+    /// for them in tests.
+    static var driveRoots: [URL] {
+        let arguments = CommandLine.arguments
+        if let flag = arguments.firstIndex(of: "--drive-root"), flag + 1 < arguments.count {
+            return [URL(fileURLWithPath: arguments[flag + 1], isDirectory: true).standardizedFileURL]
+        }
+        let storage = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/CloudStorage", isDirectory: true)
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: storage.path)) ?? []
+        return names.filter { $0.hasPrefix("GoogleDrive") }.sorted().map { storage.appendingPathComponent($0, isDirectory: true) }
+    }
+
+    static func inDrive(_ path: String) -> Bool {
+        let path = normal(path)
+        return driveRoots.contains { path == $0.path || path.hasPrefix($0.path + "/") }
+    }
+
+    /// How a folder's place is shown: "My Drive / Videos" in Drive, "~/Movies/Trips" in the home folder.
+    static func place(_ path: String) -> String {
+        let path = normal(path)
+        if let root = driveRoots.first(where: { path == $0.path || path.hasPrefix($0.path + "/") }) {
+            return String(path.dropFirst(root.path.count)).split(separator: "/").joined(separator: " / ")
+        }
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        if path.hasPrefix("/Volumes/") { return path.split(separator: "/").dropFirst().joined(separator: " / ") }
+        return path.hasPrefix(home + "/") ? "~" + path.dropFirst(home.count) : path
+    }
+
+    /// The added folders of one source, each with what its last look found.
+    func list(source: String) -> [[String: Any]] {
+        lock.lock()
+        let mine = folders.filter { $0.source == source }
+        lock.unlock()
+        return mine.map { folder in
+            let scan = scanIfNeeded(folder.path)
+            lock.lock()
+            defer { lock.unlock() }
+            let bytes = scan.items.values.reduce(Int64(0)) { $0 + $1.bytes }
+            return [
+                "path": folder.path, "name": (folder.path as NSString).lastPathComponent, "place": Folders.place(folder.path),
+                "status": scan.status, "count": scan.items.count, "bytes": bytes, "scanned": scan.scanned, "total": scan.total,
+            ]
+        }
+    }
+
+    /// Adds a folder the person chose. Returns nil, or why it can't be added.
+    func add(path: String, source: String) -> String? {
+        let url = URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL
+        var isFolder: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isFolder), isFolder.boolValue else {
+            return "That folder isn't there any more."
+        }
+        if url.pathComponents.contains(where: { $0.hasSuffix(".photoslibrary") }) {
+            return "That's a Photos library. Its photos and videos are under Apple Photos."
+        }
+        if source == "drive" && !Folders.inDrive(url.path) {
+            return "That folder isn't in Google Drive. Choose one inside Google Drive in Finder, or add it under Local Folder."
+        }
+        lock.lock()
+        if !folders.contains(where: { $0.path == url.path }) { folders.append(Folder(path: url.path, source: source)) }
+        lock.unlock()
+        save()
+        _ = scanIfNeeded(url.path)
+        return nil
+    }
+
+    /// Takes a folder off the list. Its files aren't touched.
+    func remove(path: String) {
+        let path = Folders.normal(path)
+        lock.lock()
+        folders.removeAll { $0.path == path }
+        scans[path] = nil
+        lock.unlock()
+        save()
+    }
+
+    /// Looks through the folder again, keeping the old list in view until the new one is complete.
+    func rescan(_ path: String) {
+        let path = Folders.normal(path)
+        lock.lock()
+        let scan = Scan()
+        scan.items = scans[path]?.items ?? [:]
+        scans[path] = scan
+        lock.unlock()
+        DispatchQueue.global(qos: .userInitiated).async { self.scan(path, into: scan) }
+    }
+
+    private func scanIfNeeded(_ path: String) -> Scan {
+        lock.lock()
+        if let scan = scans[path] {
+            lock.unlock()
+            return scan
+        }
+        let scan = Scan()
+        scans[path] = scan
+        lock.unlock()
+        DispatchQueue.global(qos: .userInitiated).async { self.scan(path, into: scan) }
+        return scan
+    }
+
+    static let keys: [URLResourceKey] = [
+        .isRegularFileKey, .fileSizeKey, .totalFileAllocatedSizeKey, .contentTypeKey, .creationDateKey,
+        .contentModificationDateKey, .ubiquitousItemDownloadingStatusKey,
+    ]
+
+    /// Lists the folder's photos and videos with their sizes first, then reads each one's size in pixels, length and
+    /// date, largest first, so the top of the list settles quickly. Files that are only in the cloud aren't opened,
+    /// since that would download them.
+    private func scan(_ path: String, into scan: Scan) {
+        let root = URL(fileURLWithPath: path, isDirectory: true)
+        var isFolder: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: root.path, isDirectory: &isFolder), isFolder.boolValue else {
+            lock.lock()
+            scan.status = "missing"
+            lock.unlock()
+            return
+        }
+        // Packages such as a Photos library are skipped whole.
+        let walk = FileManager.default.enumerator(at: root, includingPropertiesForKeys: Folders.keys, options: [.skipsHiddenFiles, .skipsPackageDescendants])
+        var found: [(url: URL, values: URLResourceValues)] = []
+        while let url = walk?.nextObject() as? URL {
+            guard let values = try? url.resourceValues(forKeys: Set(Folders.keys)), values.isRegularFile == true,
+                let type = values.contentType, type.conforms(to: .movie) || type.conforms(to: .image)
+            else { continue }
+            found.append((url, values))
+        }
+        found.sort { ($0.values.fileSize ?? 0) > ($1.values.fileSize ?? 0) }
+        var fresh: [String: Item] = [:]
+        for entry in found { if let item = Folders.makeItem(entry.url, entry.values, probe: false) { fresh[item.id] = item } }
+        lock.lock()
+        scan.total = found.count
+        scan.scanned = 0
+        scan.items = fresh
+        lock.unlock()
+        for entry in found {
+            autoreleasepool {
+                if let item = Folders.makeItem(entry.url, entry.values, probe: true) {
+                    lock.lock()
+                    if scan.items[item.id] != nil { scan.items[item.id] = item }
+                    scan.scanned += 1
+                    lock.unlock()
+                }
+            }
+        }
+        lock.lock()
+        scan.status = "ready"
+        scan.scanned = scan.total
+        scan.measuredAt = Date()
+        lock.unlock()
+        log("folder \(Folders.place(path)): \(found.count) photos and videos")
+    }
+
+    /// A file in the cloud only, not on this Mac: Google Drive for desktop shows it, but opening it downloads it.
+    static func isCloudOnly(_ values: URLResourceValues) -> Bool {
+        if let status = values.ubiquitousItemDownloadingStatus { return status == .notDownloaded }
+        return (values.totalFileAllocatedSize ?? 1) == 0 && (values.fileSize ?? 0) > 0
+    }
+
+    private static let exifDate: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy:MM:dd HH:mm:ss"
+        return formatter
+    }()
+
+    /// The item for a photo or video file. With `probe`, the file is opened for its size in pixels, length and the
+    /// date it was taken; without, those wait, and the file's own dates stand in.
+    static func makeItem(_ url: URL, _ values: URLResourceValues, probe: Bool) -> Item? {
+        guard let type = values.contentType, type.conforms(to: .movie) || type.conforms(to: .image) else { return nil }
+        let isVideo = type.conforms(to: .movie)
+        let cloud = isCloudOnly(values)
+        var width = 0, height = 0, duration = 0.0
+        var taken: Date?
+        if probe && !cloud {
+            if isVideo {
+                let asset = AVURLAsset(url: url)
+                let seconds = asset.duration.seconds
+                duration = seconds.isFinite ? seconds : 0
+                if let track = asset.tracks(withMediaType: .video).first {
+                    let shown = track.naturalSize.applying(track.preferredTransform)
+                    width = Int(abs(shown.width).rounded())
+                    height = Int(abs(shown.height).rounded())
+                }
+                taken = asset.creationDate?.dateValue
+            } else if let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+                let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any]
+            {
+                width = properties[kCGImagePropertyPixelWidth as String] as? Int ?? 0
+                height = properties[kCGImagePropertyPixelHeight as String] as? Int ?? 0
+                // Turned a quarter, the photo is shown the other way round.
+                if let orientation = properties[kCGImagePropertyOrientation as String] as? Int, (5...8).contains(orientation) {
+                    swap(&width, &height)
+                }
+                let exif = properties[kCGImagePropertyExifDictionary as String] as? [String: Any]
+                taken = (exif?[kCGImagePropertyExifDateTimeOriginal as String] as? String).flatMap(exifDate.date(from:))
+            }
+        }
+        let isRaw = !isVideo && type.conforms(to: .rawImage)
+        var tags: [String] = []
+        if isRaw { tags.append("RAW") }
+        if cloud { tags.append("in the cloud") }
+        var date = "", year = 0
+        if let when = taken ?? values.creationDate ?? values.contentModificationDate {
+            let parts = Calendar.current.dateComponents([.year, .month, .day], from: when)
+            year = parts.year ?? 0
+            date = String(format: "%04d-%02d-%02d", year, parts.month ?? 0, parts.day ?? 0)
+        }
+        return Item(
+            id: id(url), name: url.lastPathComponent, bytes: Int64(values.fileSize ?? 0), date: date, year: year, isVideo: isVideo,
+            isRaw: isRaw, isLive: false, isJPEG: !isVideo && type.conforms(to: .jpeg), motionBytes: 0, width: width, height: height,
+            duration: duration, favorite: false, tags: tags)
+    }
+
+    func item(_ id: String) -> Item? {
+        lock.lock()
+        defer { lock.unlock() }
+        for scan in scans.values { if let item = scan.items[id] { return item } }
+        return nil
+    }
+
+    /// The added folder a file is in, the innermost if folders sit inside each other.
+    func folder(containing url: URL) -> Folder? {
+        let path = url.standardizedFileURL.path
+        lock.lock()
+        defer { lock.unlock() }
+        return folders.filter { path.hasPrefix($0.path + "/") }.max { $0.path.count < $1.path.count }
+    }
+
+    /// The items of one added folder, a page at a time, like the Photos library's.
+    func query(folder path: String, kind: String, year: Int?, minBytes: Int64, offset: Int, limit: Int) -> [String: Any] {
+        let path = Folders.normal(path)
+        // Only folders on the list are looked into.
+        lock.lock()
+        let listed = folders.contains { $0.path == path }
+        lock.unlock()
+        guard listed else {
+            let none: [String: Any] = ["status": "missing", "scanned": 0, "total": 0, "measuredAt": NSNull()]
+            return none.merging(Library.listing([], kind: kind, year: year, minBytes: minBytes, offset: offset, limit: limit)) { $1 }
+        }
+        let scan = scanIfNeeded(path)
+        lock.lock()
+        let all = Array(scan.items.values)
+        var result: [String: Any] = ["status": scan.status, "scanned": scan.scanned, "total": scan.total]
+        result["measuredAt"] = scan.measuredAt.map { $0.timeIntervalSince1970 as Any } ?? NSNull()
+        lock.unlock()
+        return result.merging(Library.listing(all, kind: kind, year: year, minBytes: minBytes, offset: offset, limit: limit)) { $1 }
+    }
+
+    /// Adds a file the app has just written, such as a smaller copy, to its folder's list, or refreshes one that has
+    /// changed, such as a file just downloaded from Google Drive. Returns its item.
+    @discardableResult
+    func addFile(_ url: URL) -> Item? {
+        guard let values = try? url.resourceValues(forKeys: Set(Folders.keys)), let item = Folders.makeItem(url, values, probe: true),
+            let folder = folder(containing: url)
+        else { return nil }
+        lock.lock()
+        scans[folder.path]?.items[item.id] = item
+        lock.unlock()
+        return item
+    }
+
+    /// Of these file ids, the ones whose files have gone, which are also dropped from the lists.
+    @discardableResult
+    func forget(missingAmong ids: [String]) -> Set<String> {
+        let missing = Set(ids.filter { id in Folders.url(id).map { !FileManager.default.fileExists(atPath: $0.path) } ?? false })
+        guard !missing.isEmpty else { return [] }
+        lock.lock()
+        for scan in scans.values { for id in missing { scan.items[id] = nil } }
+        lock.unlock()
+        return missing
+    }
+
+    /// What would show that a file changed after it was copied: its size and when it was last changed.
+    static func fingerprint(_ url: URL) -> String? {
+        guard let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]) else { return nil }
+        return "\(values.fileSize ?? -1) \(values.contentModificationDate?.timeIntervalSince1970 ?? 0)"
+    }
+
+    /// A picture of the file, the same as Finder shows. For a file only in the cloud this may be Google's own.
+    func thumbnail(id: String, size: Int, completion: @escaping (Data?) -> Void) {
+        // Only for photos and videos in added folders, not just any file on the Mac.
+        guard item(id) != nil, let url = Folders.url(id), FileManager.default.fileExists(atPath: url.path) else { return completion(nil) }
+        let request = QLThumbnailGenerator.Request(
+            fileAt: url, size: CGSize(width: size, height: size), scale: 1, representationTypes: [.thumbnail, .lowQualityThumbnail])
+        QLThumbnailGenerator.shared.generateBestRepresentation(for: request) { picture, _ in
+            guard let image = picture?.cgImage else { return completion(nil) }
+            completion(NSBitmapImageRep(cgImage: image).representation(using: .jpeg, properties: [.compressionFactor: 0.8]))
+        }
+    }
+
+    /// Moves files to the Trash after asking, since Photos' own confirmation doesn't cover them. In Google Drive the
+    /// files go to Drive's trash as well.
+    func trash(ids: [String], completion: @escaping (Bool, String?) -> Void) {
+        let urls = ids.compactMap(Folders.url).filter { FileManager.default.fileExists(atPath: $0.path) }
+        guard !urls.isEmpty else { return completion(false, "Those files are no longer there.") }
+        let bytes = urls.reduce(Int64(0)) { sum, url in
+            sum + (item(Folders.id(url))?.bytes ?? Int64((try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0))
+        }
+        func go() {
+            var failed: [String] = []
+            for url in urls {
+                do {
+                    try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+                } catch {
+                    failed.append(url.lastPathComponent)
+                    log("couldn't move \(url.lastPathComponent) to the Trash: \(error.localizedDescription)")
+                }
+            }
+            forget(missingAmong: urls.map(Folders.id))
+            if failed.isEmpty { return completion(true, nil) }
+            completion(failed.count < urls.count, "Couldn't move \(failed.count == 1 ? failed[0] : "\(failed.count) files") to the Trash.")
+        }
+        if let root = trashWithoutAsking, urls.allSatisfy({ $0.standardizedFileURL.path.hasPrefix(root + "/") }) {
+            return DispatchQueue.global().async { go() }
+        }
+        DispatchQueue.main.async {
+            let previous = NSWorkspace.shared.frontmostApplication
+            NSApp.activate(ignoringOtherApps: true)
+            // Files in Google Drive don't show in this Mac's Trash: Google Drive keeps them in its own trash.
+            let one = urls.count == 1, drive = urls.filter { Folders.inDrive($0.path) }.count
+            let bin = drive == urls.count ? "Google Drive's trash" : "the Trash"
+            let alert = NSAlert()
+            alert.messageText = one ? "Move “\(urls[0].lastPathComponent)” to \(bin)?" : "Move \(urls.count) files to \(bin)?"
+            alert.informativeText = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file) + ". "
+                + (drive == urls.count ? "You can restore \(one ? "it" : "them") from Google Drive's trash for 30 days."
+                    : "You can put \(one ? "it" : "them") back from the Trash until it's emptied."
+                    + (drive > 0 ? " Files from Google Drive go to Google Drive's trash instead, where you can restore them for 30 days." : ""))
+            alert.addButton(withTitle: "Move to Trash")
+            alert.addButton(withTitle: "Cancel")
+            alert.buttons[0].hasDestructiveAction = true
+            let answer = alert.runModal()
+            if let previous = previous, previous != NSRunningApplication.current, !previous.isTerminated {
+                if #available(macOS 14.0, *) { NSApp.yieldActivation(to: previous) }
+                previous.activate(options: [])
+            }
+            guard answer == .alertFirstButtonReturn else { return completion(false, "Cancelled. Nothing was moved to the Trash.") }
+            DispatchQueue.global().async { go() }
+        }
+    }
 }
 
 // MARK: - History
@@ -1229,6 +1634,8 @@ final class Job {
     let kind: String
     var isPhoto: Bool { kind == "photo" }
     var isArchive: Bool { kind == "archive" }
+    /// A file in an added folder rather than an item in Photos.
+    var isFile: Bool { Folders.isFile(assetId) }
     /// For an archive job, the folder the files go into.
     let folder: URL?
     let settings: ShrinkSettings
@@ -1320,6 +1727,7 @@ final class Job {
             "item": original.json, "dryRun": dryRun, "settings": settings.json, "originalDeleted": originalDeleted, "copyDeleted": copyDeleted,
             "seconds": Int(Date().timeIntervalSince(stateSince)), "remaining": remainingSeconds ?? NSNull(),
             "deleteOriginal": deleteOriginal, "deletion": deletion, "folder": folder?.path ?? NSNull(), "files": files.count,
+            "file": isFile, "drive": isFile && Folders.inDrive(Folders.url(assetId)?.path ?? ""),
         ]
     }
 }
@@ -1327,6 +1735,7 @@ final class Job {
 /// Runs shrink jobs one at a time.
 final class Converter {
     private let library: Library
+    private let folders: Folders
     private let history: History
     private let lock = NSLock()
     private let queue = DispatchQueue(label: "shrink", qos: .userInitiated)
@@ -1345,15 +1754,16 @@ final class Converter {
     /// originals are now waiting for the deletion confirmation. For the notification.
     var onFinished: ((_ ended: [Job], _ awaitingConfirmation: Int) -> Void)?
 
-    init(library: Library, history: History) {
+    init(library: Library, folders: Folders, history: History) {
         self.library = library
+        self.folders = folders
         self.history = history
     }
 
     /// `deleteOriginal` applies to every item in the request; `deleteOriginalIds` names the ones picked for it
     /// one by one. Either is enough for an original to be deleted after its compression.
     func enqueue(ids: [String], settings: ShrinkSettings, dryRun: Bool, deleteOriginal: Bool, deleteOriginalIds: Set<String> = []) -> Int {
-        add(ids.compactMap { library.item($0) }.filter { $0.isCompressible }) { id, item in
+        add(ids.compactMap { library.item($0) ?? folders.item($0) }.filter { $0.isCompressible }) { id, item in
             Job(id: id, item: item, settings: settings, dryRun: dryRun, deleteOriginal: deleteOriginal || deleteOriginalIds.contains(item.id))
         }
     }
@@ -1433,8 +1843,33 @@ final class Converter {
         return jobs.contains { $0.isActive }
     }
 
-    /// Deletes library items through Photos (which asks the user to confirm) and records what was removed.
+    /// Deletes library items through Photos (which asks the user to confirm), or moves files in added folders to the
+    /// Trash (after Photo Review asks), and records what was removed. Photos items go first when there are both.
     func delete(ids: [String], completion: @escaping (Bool, String?) -> Void) {
+        let files = ids.filter(Folders.isFile), photos = ids.filter { !Folders.isFile($0) }
+        guard !photos.isEmpty else { return trash(files, completion: completion) }
+        deletePhotos(photos) { ok, error in
+            guard !files.isEmpty else { return completion(ok, error) }
+            self.trash(files) { trashed, problem in completion(ok && trashed, error ?? problem) }
+        }
+    }
+
+    private func trash(_ ids: [String], completion: @escaping (Bool, String?) -> Void) {
+        let doomed = ids.compactMap { folders.item($0) }
+        folders.trash(ids: ids) { ok, error in
+            let gone = ids.filter { id in Folders.url(id).map { !FileManager.default.fileExists(atPath: $0.path) } ?? false }
+            if !gone.isEmpty {
+                self.originalsDeleted(gone)
+                self.history.record([
+                    "type": "delete", "trash": true,
+                    "items": doomed.filter { gone.contains($0.id) }.map { ["id": $0.id, "name": $0.name, "bytes": $0.bytes, "video": $0.isVideo] },
+                ])
+            }
+            completion(ok, error)
+        }
+    }
+
+    private func deletePhotos(_ ids: [String], completion: @escaping (Bool, String?) -> Void) {
         let doomed = ids.compactMap { library.item($0) }
         library.delete(ids: ids) { ok, error in
             if ok {
@@ -1477,20 +1912,42 @@ final class Converter {
             for entry in kept { log("job \(entry.job.id) \(entry.job.name): original kept: \(entry.reason)") }
         }
         if !ended.isEmpty { DispatchQueue.main.async { self.onFinished?(ended, ready.count) } }
-        guard !ready.isEmpty else { return }
-        delete(ids: ready.map { $0.assetId }) { ok, error in
+        let photos = ready.filter { !$0.isFile }, files = ready.filter { $0.isFile }
+        func trashFiles() {
+            guard !files.isEmpty else { return }
+            trash(files.map { $0.assetId }) { _, error in
+                self.update { _ in
+                    for job in files {
+                        let gone = Folders.url(job.assetId).map { !FileManager.default.fileExists(atPath: $0.path) } ?? false
+                        job.deletion = gone ? "deleted" : "kept"
+                        if !gone { job.message = error ?? "It wasn't moved to the Trash." }
+                    }
+                }
+            }
+        }
+        guard !photos.isEmpty else { return trashFiles() }
+        deletePhotos(photos.map { $0.assetId }) { ok, error in
             self.update { _ in
-                for job in ready {
+                for job in photos {
                     job.deletion = ok ? "deleted" : "kept"
                     if !ok { job.message = error ?? "Photos didn't delete it." }
                 }
             }
+            trashFiles()
         }
     }
 
     /// Why an original lined up for deletion should be kept after all, or nil if its copy still stands: the smaller
     /// copy or a copied file is gone, or the original has been changed since it was copied.
     private func reasonToKeep(_ job: Job) -> String? {
+        if job.isFile {
+            guard let url = Folders.url(job.assetId), FileManager.default.fileExists(atPath: url.path) else { return nil }
+            if let source = job.source, Folders.fingerprint(url) != source { return "The original was changed after it was copied." }
+            guard let copy = job.newItem.flatMap({ Folders.url($0.id) }), FileManager.default.fileExists(atPath: copy.path) else {
+                return "The smaller copy is no longer in the folder."
+            }
+            return nil
+        }
         // Already gone from Photos: there's nothing to keep, and the deletion passes over it.
         guard let asset = library.asset(job.assetId) else { return nil }
         if let source = job.source, Converter.fingerprint(asset) != source {
@@ -1528,7 +1985,8 @@ final class Converter {
             if !job.copyDeleted, let copy = job.newItem { waiting.append(copy.id) }
         }
         lock.unlock()
-        let missing = library.forget(missingAmong: waiting)
+        let missing = library.forget(missingAmong: waiting.filter { !Folders.isFile($0) })
+            .union(folders.forget(missingAmong: waiting.filter(Folders.isFile)))
         if !missing.isEmpty { originalsDeleted(Array(missing)) }
     }
 
@@ -1601,9 +2059,12 @@ final class Converter {
     /// Makes the smaller copy, adds it to Photos with the original's details, and lines the original up for
     /// deletion if that was asked for.
     private func compress(_ job: Job) throws {
+        if job.isFile { return try compressFile(job) }
         let output = FileManager.default.temporaryDirectory.appendingPathComponent(
             "photo-review-\(UUID().uuidString).\(job.isPhoto ? "heic" : "mov")")
-        defer { if !job.dryRun { try? FileManager.default.removeItem(at: output) } }
+        // A test run keeps its file to look at, but only if it got that far; a skipped or failed one leaves nothing behind.
+        var kept = false
+        defer { if !kept { try? FileManager.default.removeItem(at: output) } }
         let asset = try job.isPhoto ? compressPhoto(job, to: output) : compressVideo(job, to: output)
         // Cancelled just as the copy was finished: nothing goes into Photos.
         if isCancelled(job) { throw ShrinkError.cancelled }
@@ -1648,6 +2109,7 @@ final class Converter {
                 awaitingDeletion.append(job)
             }
         }
+        kept = job.dryRun
         set(job, "done", message: job.dryRun ? output.path : job.message)
     }
 
@@ -1736,6 +2198,141 @@ final class Converter {
             number += 1
         }
         return candidate
+    }
+
+    /// Makes a smaller copy of a photo or video file in an added folder. The copy goes in the folder's Compressed
+    /// folder, in the same subfolders as the original, with the original's dates; the original stays where it is,
+    /// or is lined up for the Trash if that was asked for. A file that is only in Google Drive is downloaded first.
+    private func compressFile(_ job: Job) throws {
+        guard let source = Folders.url(job.assetId), FileManager.default.fileExists(atPath: source.path) else {
+            throw ShrinkError.failed("This file is no longer there.")
+        }
+        var original = job.original
+        // Cheap check before any download or encoding, as for Photos videos.
+        func checkWorthIt() throws {
+            guard original.isVideo && original.duration > 0 else { return }
+            let target = job.settings.size(width: original.width, height: original.height)
+            let rate = job.settings.bitrate(width: target.width, height: target.height, fps: job.settings.fps ?? 30)
+            if rate * original.duration / 8 > Double(job.originalBytes) * 0.8 { throw ShrinkError.nothingToGain }
+        }
+        try checkWorthIt()
+        let before = Folders.fingerprint(source)
+        update { _ in job.source = before }
+        if let values = try? source.resourceValues(forKeys: Set(Folders.keys)), Folders.isCloudOnly(values) {
+            set(job, "downloading")
+            try download(source, for: job)
+            // Now that it's here, its length and size in pixels can be read, and its tile stops saying it's in the
+            // cloud. A fresh URL, since a URL keeps the values it read before the download.
+            if let probed = folders.addFile(URL(fileURLWithPath: source.path)) { original = probed }
+            try checkWorthIt()
+        }
+        let output = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "photo-review-\(UUID().uuidString).\(original.isVideo ? "mov" : "heic")")
+        // A test run keeps its file to look at, but only if it got that far; a skipped or failed one leaves nothing behind.
+        var kept = false
+        defer { if !kept { try? FileManager.default.removeItem(at: output) } }
+        set(job, "encoding")
+        if original.isVideo {
+            try encode(AVURLAsset(url: source), to: output, settings: job.settings, isCancelled: { self.isCancelled(job) }) { fraction in
+                self.update { _ in job.progress = fraction }
+            }
+        } else if original.isRaw {
+            try developRAW(source, to: output, settings: job.settings)
+            update { _ in job.made = "raw" }
+        } else if original.isJPEG {
+            try convertToHEIC(try Data(contentsOf: source), to: output, settings: job.settings)
+            update { _ in job.made = "heic" }
+        } else {
+            throw ShrinkError(state: "skipped", message: "Only videos, RAW photos and JPEG photos are made smaller.")
+        }
+        if isCancelled(job) { throw ShrinkError.cancelled }
+        let newBytes = ((try? FileManager.default.attributesOfItem(atPath: output.path))?[.size] as? NSNumber)?.int64Value ?? 0
+        guard newBytes > 0, Double(newBytes) < Double(job.originalBytes) * 0.9 else {
+            throw job.isPhoto ? ShrinkError(state: "skipped", message: "A copy wouldn't be meaningfully smaller, so it was skipped.") : ShrinkError.nothingToGain
+        }
+
+        var newItem: Item?
+        if !job.dryRun {
+            set(job, "saving")
+            let place = copyFolder(for: source)
+            try FileManager.default.createDirectory(at: place, withIntermediateDirectories: true)
+            let stem = (job.name as NSString).deletingPathExtension
+            let target = Converter.freeName(stem + " (compressed)." + (original.isVideo ? "mov" : "heic"), in: place)
+            try FileManager.default.moveItem(at: output, to: target)
+            // The copy keeps the original's dates, so the two sort together.
+            if let dates = try? source.resourceValues(forKeys: [.creationDateKey, .contentModificationDateKey]) {
+                var attributes: [FileAttributeKey: Any] = [:]
+                if let created = dates.creationDate { attributes[.creationDate] = created }
+                if let changed = dates.contentModificationDate { attributes[.modificationDate] = changed }
+                try? FileManager.default.setAttributes(attributes, ofItemAtPath: target.path)
+            }
+            newItem = folders.addFile(target)
+            if newItem == nil { throw ShrinkError.failed("The copy was saved at \(target.path), but it couldn't be read back.") }
+        }
+        update { _ in
+            job.newBytes = newBytes
+            job.newItem = newItem
+            guard job.deleteOriginal, let copy = newItem else { return }
+            // As in Photos: only an original whose copy matches it, the same length or the same shape, goes.
+            let originalShape = Double(original.width) / Double(max(original.height, 1))
+            let copyShape = Double(copy.width) / Double(max(copy.height, 1))
+            let matches = original.isVideo
+                ? original.duration > 0 && abs(copy.duration - original.duration) < 1
+                : copy.width > 0 && original.width > 0 && abs(copyShape / originalShape - 1) < 0.02
+            job.deletion = "kept"
+            if job.cancelled {
+                job.message = "Cancelled after the copy was saved."
+            } else if !matches {
+                job.message = original.isVideo
+                    ? "The copy's length differs from the original's, so check it before deleting."
+                    : "The copy's shape differs from the original's, so check it before deleting."
+            } else {
+                job.deletion = "pending"
+                awaitingDeletion.append(job)
+            }
+        }
+        kept = job.dryRun
+        set(job, "done", message: job.dryRun ? output.path : job.message)
+    }
+
+    /// Where a file's smaller copy goes: the Compressed folder of the added folder it's in, in the same subfolders.
+    /// A copy that is itself in a Compressed folder stays beside the file it came from.
+    private func copyFolder(for file: URL) -> URL {
+        let parent = file.deletingLastPathComponent().standardizedFileURL
+        guard let root = folders.folder(containing: file).map({ URL(fileURLWithPath: $0.path, isDirectory: true) }) else {
+            return parent.appendingPathComponent(Folders.copies, isDirectory: true)
+        }
+        let inside = parent.path.count > root.path.count ? String(parent.path.dropFirst(root.path.count + 1)) : ""
+        if inside == Folders.copies || inside.hasPrefix(Folders.copies + "/") { return parent }
+        let copies = root.appendingPathComponent(Folders.copies, isDirectory: true)
+        return inside.isEmpty ? copies : copies.appendingPathComponent(inside, isDirectory: true)
+    }
+
+    /// Brings a file that is only in the cloud onto this Mac by reading it as Finder would, which has Google Drive
+    /// for desktop download it.
+    private func download(_ url: URL, for job: Job) throws {
+        let finished = DispatchSemaphore(value: 0)
+        var failure: Error?
+        DispatchQueue.global(qos: .userInitiated).async {
+            var error: NSError?
+            NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &error) { url in
+                // Reading a byte is enough: the whole file comes down before it can be read.
+                if let handle = try? FileHandle(forReadingFrom: url) {
+                    _ = try? handle.read(upToCount: 1)
+                    try? handle.close()
+                }
+            }
+            failure = error
+            finished.signal()
+        }
+        while finished.wait(timeout: .now() + 0.5) == .timedOut {
+            if isCancelled(job) { throw ShrinkError.cancelled }
+        }
+        if let failure = failure { throw ShrinkError.failed("Couldn't download it from Google Drive: " + failure.localizedDescription) }
+        // A fresh URL: the one passed in still holds the values it read before the download.
+        if let values = try? URL(fileURLWithPath: url.path).resourceValues(forKeys: Set(Folders.keys)), Folders.isCloudOnly(values) {
+            throw ShrinkError.failed("Google Drive didn't download it. Check that Google Drive for desktop is running and online.")
+        }
     }
 
     /// Downloads the video if needed and re-encodes it into `output`. Returns the original's asset.
@@ -2027,8 +2624,11 @@ struct Request {
         var length = Int(headers["content-length"] ?? "") ?? 0
         if length < 0 || length > Request.maxBody { length = 0 }
         guard data.count >= headEnd.upperBound + length else { return nil }
+        // The page builds queries with URLSearchParams, which sends a space as "+" (a real "+" arrives as %2B).
+        var form = url
+        form.percentEncodedQuery = url.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%20")
         var query: [String: String] = [:]
-        for item in url.queryItems ?? [] { query[item.name] = item.value ?? "" }
+        for item in form.queryItems ?? [] { query[item.name] = item.value ?? "" }
         method = String(parts[0])
         path = url.path
         self.query = query
@@ -2039,6 +2639,8 @@ struct Request {
 
 final class Server {
     private let library: Library
+    /// Photos and videos in folders the person adds, beside the Photos library.
+    private let folders = Folders()
     /// The app listens to it for the Dock badge and the notification when the queue is done.
     let converter: Converter
     private let history = History()
@@ -2049,13 +2651,14 @@ final class Server {
     private let icon: Data
     /// Called on the main thread with nil once the port is open, or with the reason it couldn't be.
     var onStart: ((String?) -> Void)?
-    /// Asks the person to pick a folder (the app shows its own panel) and calls back with it, or nil.
-    var chooseFolder: ((@escaping (URL?) -> Void) -> Void)?
+    /// Asks the person to pick a folder (the app shows its own panel) and calls back with it, or nil. The purpose is
+    /// "archive" (where to copy originals), "local" or "drive" (a folder to add).
+    var chooseFolder: ((_ purpose: String, _ completion: @escaping (URL?) -> Void) -> Void)?
     var hasActiveJobs: Bool { converter.hasActiveJobs }
 
     init(library: Library) {
         self.library = library
-        converter = Converter(library: library, history: history)
+        converter = Converter(library: library, folders: folders, history: history)
         func resource(_ name: String) -> String {
             let url = Bundle.main.url(forResource: name, withExtension: "html")
             return url.flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? "\(name).html is missing"
@@ -2138,23 +2741,36 @@ final class Server {
             let events = history.all().map { event -> [String: Any] in
                 guard event["type"] as? String == "shrink", event["outcome"] as? String == "done" else { return event }
                 var event = event
-                event["originalExists"] = library.item(event["assetId"] as? String ?? "") != nil
-                event["copyExists"] = library.item(event["newId"] as? String ?? "") != nil
+                // A file counts as there if it's on disk, whether or not its folder has been looked through since.
+                func exists(_ id: String) -> Bool {
+                    Folders.url(id).map { FileManager.default.fileExists(atPath: $0.path) } ?? (library.item(id) != nil)
+                }
+                event["originalExists"] = exists(event["assetId"] as? String ?? "")
+                event["copyExists"] = exists(event["newId"] as? String ?? "")
                 return event
             }
             sendJSON(connection, ["ready": library.isReady, "events": events])
         case ("GET", "/api/items"):
-            let query = {
-                self.library.query(
-                    kind: request.query["kind"] ?? "all", year: Int(request.query["year"] ?? ""),
-                    minBytes: Int64(request.query["minBytes"] ?? "") ?? 0,
-                    offset: Int(request.query["offset"] ?? "") ?? 0, limit: min(Int(request.query["limit"] ?? "") ?? 60, 2000))
+            // The Photos library, or with source=folder one added folder.
+            let folder = request.query["source"] == "folder" ? request.query["folder"] : nil
+            let query = { () -> [String: Any] in
+                let kind = request.query["kind"] ?? "all", year = Int(request.query["year"] ?? "")
+                let minBytes = Int64(request.query["minBytes"] ?? "") ?? 0
+                let offset = Int(request.query["offset"] ?? "") ?? 0, limit = min(Int(request.query["limit"] ?? "") ?? 60, 2000)
+                if let folder = folder {
+                    return self.folders.query(folder: folder, kind: kind, year: year, minBytes: minBytes, offset: offset, limit: limit)
+                }
+                return self.library.query(kind: kind, year: year, minBytes: minBytes, offset: offset, limit: limit)
             }
             var result = query()
-            // Anything on this page that has since been deleted in Photos itself is dropped before it is shown.
-            if library.isReady, let items = result["items"] as? [[String: Any]] {
+            // Anything on this page that has since been deleted, in Photos itself or in Finder, is dropped before it is shown.
+            if let items = result["items"] as? [[String: Any]] {
                 let shown = items.prefix(500).compactMap { $0["id"] as? String }
-                if !library.forget(missingAmong: shown).isEmpty { result = query() }
+                if folder != nil {
+                    if !folders.forget(missingAmong: shown).isEmpty { result = query() }
+                } else if library.isReady, !library.forget(missingAmong: shown).isEmpty {
+                    result = query()
+                }
             }
             // A video whose smaller copy is in Photos while the original is still here carries that copy
             // along. This comes from the history file, so its tile can say so after the app is restarted.
@@ -2165,7 +2781,7 @@ final class Server {
                 result["items"] = items.map { item -> [String: Any] in
                     var item = item
                     let id = item["id"] as? String ?? ""
-                    if let copy = copies[id].flatMap({ library.item($0) }) { item["copy"] = copy.json }
+                    if let copy = copies[id].flatMap({ library.item($0) ?? folders.item($0) }) { item["copy"] = copy.json }
                     if let bytes = origins[id] {
                         item["shrunkFrom"] = bytes
                     } else if [" (compressed)", " (shrunk)"].contains(where: { ((item["name"] as? String ?? "") as NSString).deletingPathExtension.hasSuffix($0) }) {
@@ -2179,10 +2795,20 @@ final class Server {
             // is nearly always on the startup disk, which is what the home folder is on. This is the space free now,
             // not counting what macOS could clear later, so a batch can't fill the disk if it doesn't.
             let free = (try? FileManager.default.homeDirectoryForCurrentUser.resourceValues(forKeys: [.volumeAvailableCapacityKey]))?.volumeAvailableCapacity
-            result["freeBytes"] = free ?? NSNull()
+            // Files on this Mac or a drive need no download; only Google Drive's can.
+            result["freeBytes"] = folder.map { Folders.inDrive($0) } == false ? NSNull() : (free ?? NSNull())
             sendJSON(connection, result)
         case ("GET", "/thumb"):
             let size = min(max(Int(request.query["size"] ?? "") ?? 480, 64), 2400)
+            if Folders.isFile(request.query["id"] ?? "") {
+                return folders.thumbnail(id: request.query["id"] ?? "", size: size) { data in
+                    if let data = data {
+                        self.send(connection, 200, "image/jpeg", data, ["Cache-Control": "private, max-age=3600"])
+                    } else {
+                        self.send(connection, 404, "text/plain", Data("no image".utf8))
+                    }
+                }
+            }
             library.thumbnail(id: request.query["id"] ?? "", size: size) { data, sharp in
                 if let data = data {
                     let caching = sharp ? "private, max-age=3600" : "no-store"
@@ -2207,7 +2833,9 @@ final class Server {
                 dryRun: payload["dryRun"] as? Bool ?? false, deleteOriginal: payload["deleteOriginal"] as? Bool ?? false,
                 deleteOriginalIds: Set(payload["deleteOriginalIds"] as? [String] ?? []))
             // Copies get their titles, captions and keywords through Photos, which macOS asks about once: ask now.
-            if started > 0, payload["dryRun"] as? Bool != true { photosControl.queueStarted() }
+            // Files in folders have none of those, so a queue of only files doesn't ask.
+            let photosItems = (payload["ids"] as? [String] ?? []).contains { !Folders.isFile($0) }
+            if started > 0, photosItems, payload["dryRun"] as? Bool != true { photosControl.queueStarted() }
             sendJSON(connection, ["ok": started > 0, "started": started, "error": started > 0 ? "" : "No videos or RAW photos to compress."])
         case ("GET", "/api/jobs"):
             converter.checkOriginals()
@@ -2227,13 +2855,50 @@ final class Server {
                 guard let choose = self.chooseFolder else {
                     return self.sendJSON(connection, ["ok": false, "error": "Choosing a folder isn't available."])
                 }
-                choose { folder in
+                choose("archive") { folder in
                     self.sendJSON(connection, folder.map { ["ok": true, "path": $0.path] } ?? ["ok": false, "error": ""])
                 }
             }
+        case ("GET", "/api/folders"):
+            let source = request.query["source"] == "drive" ? "drive" : "local"
+            let drives = Folders.driveRoots.map { root -> [String: Any] in
+                // "GoogleDrive-name@gmail.com" is how Google Drive for desktop names each account's folder.
+                let account = root.lastPathComponent.hasPrefix("GoogleDrive-") ? String(root.lastPathComponent.dropFirst(12)) : root.lastPathComponent
+                return ["path": root.path, "account": account]
+            }
+            sendJSON(connection, ["source": source, "folders": folders.list(source: source), "drives": drives])
+        case ("POST", "/api/folders/add"):
+            let payload = (try? JSONSerialization.jsonObject(with: request.body)) as? [String: Any] ?? [:]
+            let source = payload["source"] as? String == "drive" ? "drive" : "local"
+            func add(_ path: String) {
+                let problem = folders.add(path: path, source: source)
+                sendJSON(connection, problem == nil ? ["ok": true, "path": URL(fileURLWithPath: path).standardizedFileURL.path] : ["ok": false, "error": problem!])
+            }
+            // A path comes only from tests; the page has the person choose one in the usual panel.
+            if let path = payload["path"] as? String { return add(path) }
+            DispatchQueue.main.async {
+                guard let choose = self.chooseFolder else {
+                    return self.sendJSON(connection, ["ok": false, "error": "Choosing a folder isn't available."])
+                }
+                choose(source) { folder in
+                    guard let folder = folder else { return self.sendJSON(connection, ["ok": false, "error": ""]) }
+                    DispatchQueue.global().async { add(folder.path) }
+                }
+            }
+        case ("POST", "/api/folders/remove"):
+            let payload = (try? JSONSerialization.jsonObject(with: request.body)) as? [String: Any] ?? [:]
+            guard let path = payload["path"] as? String else { return sendJSON(connection, ["ok": false, "error": "No folder."], status: 400) }
+            folders.remove(path: path)
+            sendJSON(connection, ["ok": true])
         case ("GET", "/api/version"):
             sendJSON(connection, updates.json)
         case ("POST", "/api/update"):
+            // With a folder, that folder is looked through again; without, the Photos library is measured again.
+            let payload = (try? JSONSerialization.jsonObject(with: request.body)) as? [String: Any] ?? [:]
+            if let folder = payload["folder"] as? String {
+                folders.rescan(folder)
+                return sendJSON(connection, ["ok": true])
+            }
             sendJSON(connection, ["ok": library.update()])
         case ("POST", "/api/jobs/cancel"):
             let payload = (try? JSONSerialization.jsonObject(with: request.body)) as? [String: Any]
@@ -2245,6 +2910,16 @@ final class Server {
         case ("POST", "/api/reveal"):
             let payload = (try? JSONSerialization.jsonObject(with: request.body)) as? [String: Any]
             let id = payload?["id"] as? String ?? ""
+            // A file is shown in Finder instead.
+            if let url = Folders.url(id) {
+                guard FileManager.default.fileExists(atPath: url.path) else {
+                    return sendJSON(connection, ["ok": false, "error": "it's no longer in that folder."])
+                }
+                return DispatchQueue.main.async {
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                    self.sendJSON(connection, ["ok": true, "error": ""])
+                }
+            }
             let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-/"))
             guard !id.isEmpty, id.unicodeScalars.allSatisfy(allowed.contains) else {
                 return sendJSON(connection, ["ok": false, "error": "Bad id."], status: 400)
@@ -2263,11 +2938,15 @@ final class Server {
     }
 
     private func serveVideo(_ request: Request, _ connection: NWConnection) {
+        let id = request.query["id"] ?? ""
         // Only videos have something to play; anything else is simply not found.
-        guard library.item(request.query["id"] ?? "")?.isVideo == true else {
+        guard (library.item(id) ?? folders.item(id))?.isVideo == true else {
             return send(connection, 404, "text/plain", Data("not a video".utf8))
         }
-        library.videoURL(id: request.query["id"] ?? "") { url in
+        // A file in a folder plays from where it is (one only in Google Drive downloads as it plays).
+        let find: (@escaping (URL?) -> Void) -> Void = Folders.isFile(id)
+            ? { found in found(Folders.url(id)) } : { found in self.library.videoURL(id: id, completion: found) }
+        find { url in
             guard let url = url else {
                 return self.send(connection, 504, "text/plain", Data("Photos didn't provide the video".utf8))
             }
@@ -2382,8 +3061,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         server.onStart = { [weak self] problem in self?.started(problem) }
         server.converter.onActiveCount = { [weak self] count in self?.queueChanged(count) }
         server.converter.onFinished = { [weak self] ended, confirming in self?.queueFinished(ended, confirming) }
-        server.chooseFolder = { [weak self] completion in
-            if let self = self { self.chooseFolder(completion) } else { completion(nil) }
+        server.chooseFolder = { [weak self] purpose, completion in
+            if let self = self { self.chooseFolder(purpose, completion) } else { completion(nil) }
         }
         do {
             try server.start()
@@ -2581,18 +3260,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     // MARK: Archive
 
     /// The folder for "Copy to a folder, then delete", picked in the usual Mac panel. The last one is offered again.
-    private func chooseFolder(_ completion: @escaping (URL?) -> Void) {
+    private func chooseFolder(_ purpose: String, _ completion: @escaping (URL?) -> Void) {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true
         panel.allowsMultipleSelection = false
-        panel.prompt = "Copy Here"
-        panel.message = "Choose where to copy the originals, for example a folder on an external drive. Photo Review makes a folder for each year inside it. The files keep their camera details, but not the titles, captions, keywords or albums from Photos."
-        if let last = UserDefaults.standard.string(forKey: "archiveFolder") { panel.directoryURL = URL(fileURLWithPath: last) }
+        // Each purpose remembers its own last folder.
+        let remembered: String
+        var start: URL?
+        switch purpose {
+        case "local":
+            panel.prompt = "Add Folder"
+            panel.message = "Choose a folder on this Mac or an external drive. Photo Review lists its photos and videos, largest first; nothing in it changes until you choose."
+            remembered = "localFolder"
+            start = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Movies", isDirectory: true)
+        case "drive":
+            panel.prompt = "Add Folder"
+            panel.message = "Choose a folder in Google Drive. Files that are only in the cloud are listed without being downloaded."
+            remembered = "driveFolder"
+            start = Folders.driveRoots.first.map { root in
+                let mine = root.appendingPathComponent("My Drive", isDirectory: true)
+                return FileManager.default.fileExists(atPath: mine.path) ? mine : root
+            }
+        default:
+            panel.prompt = "Copy Here"
+            panel.message = "Choose where to copy the originals, for example a folder on an external drive. Photo Review makes a folder for each year inside it. The files keep their camera details, but not the titles, captions, keywords or albums from Photos."
+            remembered = "archiveFolder"
+        }
+        if let last = UserDefaults.standard.string(forKey: remembered) { start = URL(fileURLWithPath: last) }
+        if let start = start { panel.directoryURL = start }
         func chosen(_ response: NSApplication.ModalResponse) {
             guard response == .OK, let folder = panel.url else { return completion(nil) }
-            UserDefaults.standard.set(folder.path, forKey: "archiveFolder")
+            UserDefaults.standard.set(folder.path, forKey: remembered)
             completion(folder)
         }
         NSApp.activate(ignoringOtherApps: true)

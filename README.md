@@ -1,9 +1,9 @@
 <p align="center"><img src="assets/icon.svg" width="120" alt=""></p>
 <h1 align="center">Photo Review</h1>
-<p align="center">See what is filling your iCloud Photos storage, then compress the videos or delete what you don't need.</p>
+<p align="center">See what is filling your iCloud Photos or Google Drive storage, then compress the big videos and photos or delete what you don't need.</p>
 <p align="center"><a href="https://danielyaa5.github.io/photo-review/"><b>Website and download</b></a></p>
 
-![Previewing a video, selecting three, compressing them and seeing the space saved](docs/demo.gif)
+![Previewing a video, selecting three, compressing them, seeing the space saved, then opening a Google Drive folder](docs/demo.gif)
 
 <sub>The demo uses made-up names and sizes, with free placeholder photos standing in for a real library. In
 real use macOS asks you to confirm before anything is deleted; that dialog isn't shown here.</sub>
@@ -82,12 +82,14 @@ Photo Review > Check for Updates Automatically turns off.
 - **Quick to reopen.** Measuring a large library takes a minute or more, so the result is kept for a day.
   The page says when it was measured, and "Measure again" does that.
 
-| The library, with a queue running | Choosing how far to compress | Savings and history |
-|---|---|---|
-| ![The library view, largest first](docs/screenshot-library.png) | ![The compress dialog with a per-video size estimate](docs/screenshot-shrink.png) | ![The savings page](docs/screenshot-savings.png) |
+| The library, with a queue running | Choosing how far to compress |
+|---|---|
+| ![The library view, largest first](docs/screenshot-library.png) | ![The compress dialog with a per-video size estimate](docs/screenshot-shrink.png) |
+| **A Google Drive folder** | **Savings and history** |
+| ![A Google Drive folder, largest first, most files only in the cloud](docs/screenshot-drive.png) | ![The savings page](docs/screenshot-savings.png) |
 
-The library and compress screenshots use made-up data; the Savings one is the author's own history. The pictures
-in those two screenshots and in the demo are free placeholder photos from [Lorem Picsum](https://picsum.photos),
+The library, compress and Google Drive screenshots use made-up data; the Savings one is the author's own history.
+The pictures in those three screenshots and in the demo are free placeholder photos from [Lorem Picsum](https://picsum.photos),
 which draws on [Unsplash](https://unsplash.com/license).
 
 ## How compressing works

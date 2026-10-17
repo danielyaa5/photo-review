@@ -1,8 +1,13 @@
 import AVFoundation
 import AppKit
+import CoreImage
+import ImageIO
 import Network
 import Photos
+import UniformTypeIdentifiers
+import UserNotifications
 import VideoToolbox
+import WebKit
 
 /// 8377 unless started with `--port N`.
 let port: UInt16 = {
@@ -32,6 +37,72 @@ func dataFile(_ name: String, flag: String) -> URL {
     return folder.appendingPathComponent(name)
 }
 
+// MARK: - Updates
+
+/// Asks GitHub whether a newer release is out. The request is the same as opening the releases page in a
+/// browser, and nothing about the library is sent. The app checks when it opens and once a day while it stays open,
+/// unless that's switched off.
+final class UpdateChecker {
+    private let lock = NSLock()
+    private var latest: (version: String, page: URL)?
+    let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+    static let releasesPage = URL(string: "https://github.com/danielyaa5/photo-review/releases/latest")!
+    /// `--update-url URL` points the check somewhere else, for testing.
+    private let endpoint: URL = {
+        let arguments = CommandLine.arguments
+        if let flag = arguments.firstIndex(of: "--update-url"), flag + 1 < arguments.count, let url = URL(string: arguments[flag + 1]) {
+            return url
+        }
+        return URL(string: "https://api.github.com/repos/danielyaa5/photo-review/releases/latest")!
+    }()
+
+    /// Calls back with the newer version and its page, nil for both when this one is current, or a problem.
+    func check(_ completion: ((_ newer: (version: String, page: URL)?, _ problem: String?) -> Void)? = nil) {
+        var request = URLRequest(url: endpoint, timeoutInterval: 20)
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        request.setValue("Photo Review/\(current)", forHTTPHeaderField: "User-Agent")
+        URLSession.shared.dataTask(with: request) { data, _, error in
+            guard let data = data, let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                let tag = json["tag_name"] as? String
+            else {
+                log("update check failed: \(error?.localizedDescription ?? "no release in the answer")")
+                completion?(nil, error?.localizedDescription ?? "GitHub didn't say which version is the latest.")
+                return
+            }
+            let version = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
+            let page = (json["html_url"] as? String).flatMap(URL.init(string:)) ?? UpdateChecker.releasesPage
+            self.lock.lock()
+            self.latest = (version, page)
+            self.lock.unlock()
+            log("update check: latest \(version), this is \(self.current)")
+            completion?(UpdateChecker.isNewer(version, than: self.current) ? (version, page) : nil, nil)
+        }.resume()
+    }
+
+    /// Compares dotted version numbers part by part: 0.5.10 is newer than 0.5.9.
+    static func isNewer(_ version: String, than other: String) -> Bool {
+        let a = version.split(separator: ".").map { Int($0) ?? 0 }, b = other.split(separator: ".").map { Int($0) ?? 0 }
+        for index in 0..<max(a.count, b.count) {
+            let x = index < a.count ? a[index] : 0, y = index < b.count ? b[index] : 0
+            if x != y { return x > y }
+        }
+        return false
+    }
+
+    /// What the page needs for its "a new version is out" note.
+    var json: [String: Any] {
+        lock.lock()
+        defer { lock.unlock() }
+        let available = latest.map { UpdateChecker.isNewer($0.version, than: current) } ?? false
+        return [
+            "current": current, "latest": latest?.version ?? NSNull(), "url": latest?.page.absoluteString ?? NSNull(),
+            "available": available,
+        ]
+    }
+}
+
+let updates = UpdateChecker()
+
 // MARK: - Library
 
 struct Item {
@@ -41,6 +112,14 @@ struct Item {
     let date: String
     let year: Int
     let isVideo: Bool
+    /// A photo whose original is a camera RAW file, which can be compressed into a 10-bit HEIC copy.
+    let isRaw: Bool
+    /// A Live Photo: a still with a short video. A copy of the still alone drops the video.
+    let isLive: Bool
+    /// A photo stored as JPEG, which a HEIC copy can make about half the size.
+    let isJPEG: Bool
+    /// Bytes taken by a Live Photo's video, original and edited, so the page can say what dropping it saves.
+    let motionBytes: Int64
     let width: Int
     let height: Int
     let duration: Double
@@ -50,9 +129,23 @@ struct Item {
 
     var json: [String: Any] {
         [
-            "id": id, "name": name, "bytes": bytes, "date": date, "year": year, "video": isVideo,
-            "w": width, "h": height, "dur": duration, "fav": favorite, "tags": tags,
+            "id": id, "name": name, "bytes": bytes, "date": date, "year": year, "video": isVideo, "raw": isRaw,
+            "live": isLive, "jpeg": isJPEG, "motion": motionBytes, "w": width, "h": height, "dur": duration,
+            "fav": favorite, "tags": tags,
         ]
+    }
+
+    /// What a smaller copy can be made of: a video re-encoded, a RAW or JPEG photo saved as HEIC, or the
+    /// still of a Live Photo without its video. Other photos are already compact.
+    var isCompressible: Bool { isVideo || isRaw || isLive || isJPEG }
+
+    /// Camera RAW files by name, for measurements cached before the app recorded RAW separately.
+    static func looksRaw(_ name: String) -> Bool {
+        let rawExtensions: Set<String> = [
+            "dng", "cr2", "cr3", "crw", "nef", "nrw", "arw", "srf", "sr2", "raf", "orf", "rw2", "pef", "srw", "3fr",
+            "iiq", "erf", "kdc", "dcr", "mos", "mrw", "x3f", "rwl", "gpr",
+        ]
+        return rawExtensions.contains((name as NSString).pathExtension.lowercased())
     }
 }
 
@@ -62,11 +155,19 @@ extension Item {
         guard let id = json["id"] as? String, let name = json["name"] as? String,
             let bytes = (json["bytes"] as? NSNumber)?.int64Value
         else { return nil }
+        let isVideo = json["video"] as? Bool ?? false
+        let isRaw = json["raw"] as? Bool ?? (!isVideo && Item.looksRaw(name))
+        var tags = json["tags"] as? [String] ?? []
+        if isRaw && !tags.contains("RAW") { tags.insert("RAW", at: 0) }
+        // Measurements saved before these were recorded fall back to the tags and the file name.
+        let isLive = json["live"] as? Bool ?? (!isVideo && tags.contains("live"))
+        let isJPEG = json["jpeg"] as? Bool ?? (!isVideo && !isRaw && ["jpg", "jpeg"].contains((name as NSString).pathExtension.lowercased()))
         self.init(
             id: id, name: name, bytes: bytes, date: json["date"] as? String ?? "", year: json["year"] as? Int ?? 0,
-            isVideo: json["video"] as? Bool ?? false, width: json["w"] as? Int ?? 0, height: json["h"] as? Int ?? 0,
+            isVideo: isVideo, isRaw: isRaw, isLive: isLive, isJPEG: isJPEG,
+            motionBytes: (json["motion"] as? NSNumber)?.int64Value ?? 0, width: json["w"] as? Int ?? 0, height: json["h"] as? Int ?? 0,
             duration: (json["dur"] as? NSNumber)?.doubleValue ?? 0, favorite: json["fav"] as? Bool ?? false,
-            tags: json["tags"] as? [String] ?? [])
+            tags: tags)
     }
 }
 
@@ -221,8 +322,11 @@ final class Library {
         let resources = PHAssetResource.assetResources(for: asset)
         // Everything stored for the item counts: original, edited version, Live Photo video.
         var bytes: Int64 = 0
+        var motionBytes: Int64 = 0
         for resource in resources {
-            bytes += (resource.value(forKey: "fileSize") as? NSNumber)?.int64Value ?? 0
+            let size = (resource.value(forKey: "fileSize") as? NSNumber)?.int64Value ?? 0
+            bytes += size
+            if resource.type == .pairedVideo || resource.type == .fullSizePairedVideo { motionBytes += size }
         }
         let primary = resources.first { $0.type == .video || $0.type == .photo } ?? resources.first
         var date = ""
@@ -240,6 +344,17 @@ final class Library {
         if subtypes.contains(.photoLive) { tags.append("live") }
         if subtypes.contains(.photoPanorama) { tags.append("panorama") }
         if subtypes.contains(.photoScreenshot) { tags.append("screenshot") }
+        // A RAW photo is one whose own original is a RAW file. RAW+JPEG pairs, where Photos shows the JPEG, aren't.
+        let isRaw = asset.mediaType == .image && primary?.type == .photo
+            && (primary.flatMap { UTType($0.uniformTypeIdentifier)?.conforms(to: .rawImage) } ?? false)
+        if isRaw { tags.append("RAW") }
+        // Going by the video itself rather than its size, which Photos doesn't always know.
+        let isLive = asset.mediaType == .image && subtypes.contains(.photoLive)
+            && resources.contains { $0.type == .pairedVideo || $0.type == .fullSizePairedVideo }
+        // A JPEG with a RAW file kept alongside it (RAW+JPEG from a camera) isn't offered: a copy would drop the RAW.
+        let isJPEG = asset.mediaType == .image && !isRaw && primary?.type == .photo
+            && (primary.flatMap { UTType($0.uniformTypeIdentifier)?.conforms(to: .jpeg) } ?? false)
+            && !resources.contains { $0.type == .alternatePhoto }
         if asset.hasAdjustments { tags.append("edited") }
         // Not a public property, so only read it where it exists. A hint: it goes stale as Photos frees space.
         if let primary = primary, primary.responds(to: NSSelectorFromString("isLocallyAvailable")),
@@ -249,11 +364,13 @@ final class Library {
         }
         return Item(
             id: asset.localIdentifier, name: primary?.originalFilename ?? "(unnamed)", bytes: bytes,
-            date: date, year: year, isVideo: asset.mediaType == .video, width: asset.pixelWidth,
+            date: date, year: year, isVideo: asset.mediaType == .video, isRaw: isRaw, isLive: isLive, isJPEG: isJPEG,
+            motionBytes: motionBytes, width: asset.pixelWidth,
             height: asset.pixelHeight, duration: asset.duration, favorite: asset.isFavorite, tags: tags)
     }
 
-    func query(kind: String, year: Int?, offset: Int, limit: Int) -> [String: Any] {
+    /// `minBytes` leaves out anything smaller, for picking many items at once.
+    func query(kind: String, year: Int?, minBytes: Int64 = 0, offset: Int, limit: Int) -> [String: Any] {
         lock.lock()
         let all = Array(items.values)
         var state: [String: Any] = ["status": status, "scanned": scanned, "total": total]
@@ -265,19 +382,25 @@ final class Library {
 
         var years: [Int: (bytes: Int64, count: Int)] = [:]
         var libraryBytes: Int64 = 0
+        var rawCount = 0
         for item in all {
             libraryBytes += item.bytes
             years[item.year, default: (0, 0)].bytes += item.bytes
             years[item.year, default: (0, 0)].count += 1
+            if item.isRaw { rawCount += 1 }
         }
+        // "photo" includes RAW photos; "raw" is only those.
         let matches = all.filter { item in
-            (kind == "all" || (kind == "video") == item.isVideo) && (year == nil || item.year == year)
+            let kindMatches = kind == "all" || (kind == "raw" ? item.isRaw : (kind == "video") == item.isVideo)
+            return kindMatches && (year == nil || item.year == year) && item.bytes >= minBytes
         }.sorted { $0.bytes != $1.bytes ? $0.bytes > $1.bytes : $0.id < $1.id }
         let page = matches.dropFirst(max(0, offset)).prefix(max(0, limit))
 
         var result = state
         result["libraryBytes"] = libraryBytes
         result["libraryCount"] = all.count
+        // The page only offers a RAW filter when there is something for it to show.
+        result["rawCount"] = rawCount
         result["matchCount"] = matches.count
         result["matchBytes"] = matches.reduce(Int64(0)) { $0 + $1.bytes }
         result["years"] = years.keys.sorted(by: >).map { ["year": $0, "bytes": years[$0]!.bytes, "count": years[$0]!.count] }
@@ -425,8 +548,8 @@ final class Library {
         var found: [String] = []
         assets.enumerateObjects { asset, _, _ in found.append(asset.localIdentifier) }
         // The confirmation is this app's own dialog, so the app has to come forward for it to be seen.
-        // Once it has been answered, hand the screen back to whatever was in front, normally the browser,
-        // rather than leaving this app's little window sitting on top.
+        // Once it has been answered, hand the screen back to whatever was in front: another app, when the
+        // deletion comes at the end of a long queue, or the browser for someone using the page there.
         var previous: NSRunningApplication?
         DispatchQueue.main.async {
             previous = NSWorkspace.shared.frontmostApplication
@@ -565,6 +688,13 @@ struct ShrinkSettings {
         let scale = Double(cap) / Double(short)
         return (Int((Double(width) * scale / 2).rounded()) * 2, Int((Double(height) * scale / 2).rounded()) * 2)
     }
+
+    /// HEIC compression for RAW photos. On test RAWs from four cameras these came to roughly 13-45%,
+    /// 6-25% and 4-19% of the RAW file; index.html uses the same ranges for its estimate.
+    var photoQuality: Double { quality == "low" ? 0.6 : quality == "medium" ? 0.75 : 0.9 }
+
+    /// HEIC compression for JPEG photos and the JPEG stills of Live Photos. index.html estimates the sizes.
+    var jpegQuality: Double { quality == "low" ? 0.5 : quality == "medium" ? 0.65 : 0.8 }
 
     /// Target video bitrate in bits per second. index.html mirrors this for its estimate.
     /// `hevc` is the format the copy will really be in, which is HEVC for HDR and 10-bit video whatever was chosen.
@@ -767,14 +897,343 @@ func encode(
     guard writer.status == .completed else { throw writer.error ?? ShrinkError.failed("Encoding failed.") }
 }
 
+/// Develops a camera RAW file the way Photos shows it by default and saves it at `url` as a 10-bit HEIC in
+/// Display P3, carrying over the file's own camera data (dates, camera, lens, GPS).
+func developRAW(_ file: URL, to url: URL, settings: ShrinkSettings) throws {
+    guard let filter = CIRAWFilter(imageURL: file) else { throw ShrinkError.failed("This Mac can't read this RAW format.") }
+    // A smaller size is made while developing, which is quicker and sharper than scaling the result.
+    let native = filter.nativeSize
+    if let cap = settings.shortSide, min(native.width, native.height) > CGFloat(cap) {
+        filter.scaleFactor = Float(CGFloat(cap) / min(native.width, native.height))
+    }
+    guard let developed = filter.outputImage else { throw ShrinkError.failed("This RAW file couldn't be developed.") }
+    var properties = developed.properties
+    if let source = CGImageSourceCreateWithURL(file as CFURL, nil),
+        let original = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any]
+    {
+        let carried = [
+            kCGImagePropertyExifDictionary, kCGImagePropertyTIFFDictionary, kCGImagePropertyGPSDictionary,
+            kCGImagePropertyExifAuxDictionary, kCGImagePropertyIPTCDictionary,
+        ]
+        for key in carried as [String] { if let value = original[key] { properties[key] = value } }
+    }
+    // The developed picture is already upright, and may be smaller than the RAW, so the copy says so.
+    properties[kCGImagePropertyOrientation as String] = 1
+    if var tiff = properties[kCGImagePropertyTIFFDictionary as String] as? [String: Any] {
+        tiff[kCGImagePropertyTIFFOrientation as String] = 1
+        properties[kCGImagePropertyTIFFDictionary as String] = tiff
+    }
+    if var exif = properties[kCGImagePropertyExifDictionary as String] as? [String: Any] {
+        exif[kCGImagePropertyExifPixelXDimension as String] = Int(developed.extent.width)
+        exif[kCGImagePropertyExifPixelYDimension as String] = Int(developed.extent.height)
+        properties[kCGImagePropertyExifDictionary as String] = exif
+    }
+    let image = developed.settingProperties(properties)
+    let context = CIContext(options: [.workingColorSpace: CGColorSpace(name: CGColorSpace.extendedLinearDisplayP3)!])
+    try? FileManager.default.removeItem(at: url)
+    let quality = CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String)
+    try context.writeHEIF10Representation(
+        of: image, to: url, colorSpace: CGColorSpace(name: CGColorSpace.displayP3)!, options: [quality: settings.photoQuality])
+}
+
+/// Free space on the drive that holds `url`, or nil if it can't be read. The startup disk counts the space macOS can
+/// make by clearing caches and the like; other drives say 0 for that, so their plain free space is the figure to use.
+func freeSpace(at url: URL) -> Int64? {
+    let space = try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey, .volumeAvailableCapacityKey])
+    let important = space?.volumeAvailableCapacityForImportantUsage ?? 0
+    return important > 0 ? important : space?.volumeAvailableCapacity.map { Int64($0) }
+}
+
+/// Saves the picture in an image file's data as a HEIC at `url`, carrying over its metadata, its HDR gain map and,
+/// at full size, the depth data behind Portrait effects. Used for JPEG photos, which come out at about half the size.
+/// `settings` gives the quality and any cap on the size; `orientation` replaces the file's own when Photos shows
+/// the photo turned another way.
+func convertToHEIC(_ data: Data, to url: URL, settings: ShrinkSettings, orientation: CGImagePropertyOrientation? = nil) throws {
+    guard let source = CGImageSourceCreateWithData(data as CFData, nil), CGImageSourceGetCount(source) > 0 else {
+        throw ShrinkError.failed("This photo couldn't be read.")
+    }
+    try? FileManager.default.removeItem(at: url)
+    guard let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.heic.identifier as CFString, 1, nil) else {
+        throw ShrinkError.failed("This Mac can't save HEIC photos.")
+    }
+    var options: [CFString: Any] = [kCGImageDestinationLossyCompressionQuality: settings.jpegQuality]
+    // Most iPhone photos have one, and without it they look flatter on a screen that can show HDR.
+    if #available(macOS 14.1, *) { options[kCGImageDestinationPreserveGainMap] = true }
+    if let orientation = orientation { options[kCGImagePropertyOrientation] = orientation.rawValue }
+    let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any] ?? [:]
+    let width = properties[kCGImagePropertyPixelWidth as String] as? Int ?? 0
+    let height = properties[kCGImagePropertyPixelHeight as String] as? Int ?? 0
+    let scaled = settings.shortSide.map { min(width, height) > $0 } ?? false
+    if scaled, let cap = settings.shortSide {
+        // Scaled as it's written, gain map included; the orientation tag still applies, and only the size changes.
+        let longSide = Int((Double(max(width, height)) * Double(cap) / Double(min(width, height))).rounded())
+        let scale = Double(longSide) / Double(max(width, height))
+        options[kCGImageDestinationImageMaxPixelSize] = longSide
+        options[kCGImagePropertyExifDictionary] = [
+            kCGImagePropertyExifPixelXDimension: Int((Double(width) * scale).rounded()),
+            kCGImagePropertyExifPixelYDimension: Int((Double(height) * scale).rounded()),
+        ]
+    }
+    CGImageDestinationAddImageFromSource(destination, source, 0, options as CFDictionary)
+    // Depth and mattes only line up with the picture at its own size.
+    if !scaled {
+        var kinds = [
+            kCGImageAuxiliaryDataTypeDisparity, kCGImageAuxiliaryDataTypeDepth, kCGImageAuxiliaryDataTypePortraitEffectsMatte,
+            kCGImageAuxiliaryDataTypeSemanticSegmentationSkinMatte, kCGImageAuxiliaryDataTypeSemanticSegmentationHairMatte,
+            kCGImageAuxiliaryDataTypeSemanticSegmentationTeethMatte,
+        ]
+        if #available(macOS 14.1, *) {
+            kinds += [kCGImageAuxiliaryDataTypeSemanticSegmentationGlassesMatte, kCGImageAuxiliaryDataTypeSemanticSegmentationSkyMatte]
+        }
+        for kind in kinds {
+            if let info = CGImageSourceCopyAuxiliaryDataInfoAtIndex(source, 0, kind) { CGImageDestinationAddAuxiliaryDataInfo(destination, kind, info) }
+        }
+    }
+    guard CGImageDestinationFinalize(destination) else { throw ShrinkError.failed("Couldn't save the HEIC copy.") }
+}
+
+/// Whether Photo Review may control Photos, which copying titles, captions and keywords needs; macOS asks once. The app
+/// asks when a queue starts, so the question comes while someone is at the Mac rather than when the first copy is
+/// saved, which for a large video can be an hour later. If it goes unanswered, one copy in the queue waits for it and
+/// the rest go ahead without their details, picking up again as soon as it's answered.
+final class PhotosControl {
+    enum Answer: String { case allowed, refused, undecided, unavailable }
+    private let lock = NSLock()
+    /// Open while macOS is asking.
+    private var question: DispatchGroup?
+    /// A copy in the current queue has already waited for an answer.
+    private var waited = false
+    private let check: (_ prompt: Bool) -> Answer
+    private let patience: Double
+
+    /// `check` and `patience` (seconds) can be replaced for testing.
+    init(check: @escaping (_ prompt: Bool) -> Answer = PhotosControl.ask, patience: Double = 90) {
+        self.check = check
+        self.patience = patience
+    }
+
+    /// When a queue starts: asks now if macOS hasn't been told yet, without waiting for the answer.
+    func queueStarted() {
+        lock.lock()
+        waited = false
+        lock.unlock()
+        _ = openQuestion()
+    }
+
+    /// What to go by before copying an item's details.
+    func answerForCopy() -> Answer {
+        let now = check(false)
+        guard now == .undecided else { return now }
+        lock.lock()
+        let first = !waited
+        waited = true
+        lock.unlock()
+        guard first else { return now }
+        _ = openQuestion().wait(timeout: .now() + patience)
+        return check(false)
+    }
+
+    /// The question macOS is asking, starting it if it isn't already.
+    private func openQuestion() -> DispatchGroup {
+        lock.lock()
+        defer { lock.unlock() }
+        if let open = question { return open }
+        let open = DispatchGroup()
+        open.enter()
+        question = open
+        // It doesn't return until the question is answered, so not on the main thread.
+        DispatchQueue.global(qos: .userInitiated).async {
+            let answer = self.check(true)
+            log("controlling Photos: \(answer.rawValue)")
+            self.lock.lock()
+            self.question = nil
+            self.lock.unlock()
+            open.leave()
+        }
+        return open
+    }
+
+    static var photosIsOpen: Bool {
+        NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Photos").contains { $0.isFinishedLaunching }
+    }
+
+    /// Asks macOS, putting the question to the person if `prompt` and nothing has been decided yet. macOS only answers
+    /// about a running app, so Photos is opened first if it isn't, hidden and without coming to the front.
+    static func ask(prompt: Bool) -> Answer {
+        if !photosIsOpen, let photos = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Photos") {
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = false
+            configuration.hides = true
+            configuration.addsToRecentItems = false
+            NSWorkspace.shared.openApplication(at: photos, configuration: configuration)
+            var waited = 0.0
+            while !photosIsOpen && waited < 15 {
+                Thread.sleep(forTimeInterval: 0.25)
+                waited += 0.25
+            }
+        }
+        var target = AEAddressDesc()
+        let bundle = "com.apple.Photos"
+        guard bundle.withCString({ AECreateDesc(DescType(typeApplicationBundleID), $0, bundle.utf8.count, &target) }) == noErr else {
+            return .unavailable
+        }
+        defer { AEDisposeDesc(&target) }
+        switch Int(AEDeterminePermissionToAutomateTarget(&target, AEEventClass(typeWildCard), AEEventID(typeWildCard), prompt)) {
+        case Int(noErr): return .allowed
+        case errAEEventNotPermitted: return .refused
+        case procNotFound: return .unavailable
+        default: return .undecided
+        }
+    }
+}
+
+let photosControl = PhotosControl()
+
+/// Photos keeps titles, captions and keywords where PhotoKit can't reach them, so they're copied to the new item
+/// through Photos' scripting, which opens Photos if it isn't running. Returns nil when that worked or there was
+/// nothing to copy, otherwise a short note for the page.
+func copyDetails(from original: String, to copy: String) -> String? {
+    let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-/"))
+    guard [original, copy].allSatisfy({ !$0.isEmpty && $0.unicodeScalars.allSatisfy(allowed.contains) }) else { return nil }
+    // Asked first, so a question nobody has answered holds up one copy in a queue rather than each one in turn.
+    switch photosControl.answerForCopy() {
+    case .allowed: break
+    case .refused:
+        return "Titles, captions and keywords weren't copied: allow Photo Review to control Photos in System Settings > Privacy & Security > Automation."
+    case .undecided:
+        return "Titles, captions and keywords weren't copied: macOS is still waiting for an answer about letting Photo Review control Photos."
+    case .unavailable:
+        return "Titles, captions and keywords weren't copied: Photos couldn't be opened."
+    }
+    let script = """
+        tell application "Photos"
+            set sourceItem to media item id "\(original)"
+            set copyItem to media item id "\(copy)"
+            set itemTitle to name of sourceItem
+            if itemTitle is not missing value and itemTitle is not "" then set name of copyItem to itemTitle
+            set itemCaption to description of sourceItem
+            if itemCaption is not missing value and itemCaption is not "" then set description of copyItem to itemCaption
+            set itemKeywords to keywords of sourceItem
+            if itemKeywords is not missing value and itemKeywords is not {} then set keywords of copyItem to itemKeywords
+        end tell
+        """
+    for attempt in 1...6 {
+        let (status, errors) = runAppleScript(script, timeout: 90)
+        if status == 0 { return nil }
+        // A brand-new item can take a moment to show up in Photos' scripting.
+        if errors.contains("-1728"), attempt < 6 {
+            Thread.sleep(forTimeInterval: 2)
+            continue
+        }
+        log("copying details to \(copy) failed: \(errors)")
+        if errors.contains("-1743") {
+            return "Titles, captions and keywords weren't copied: allow Photo Review to control Photos in System Settings > Privacy & Security > Automation."
+        }
+        return "Titles, captions and keywords couldn't be copied (" + errors.trimmingCharacters(in: .whitespacesAndNewlines).suffix(120) + ")."
+    }
+    return "Titles, captions and keywords weren't copied: Photos didn't find the new copy in time."
+}
+
+/// Runs AppleScript in a separate osascript process, so a slow Photos, or a permission prompt nobody has
+/// answered, can't hold the app up. Gives up after `timeout` seconds. Returns the exit status and any errors.
+func runAppleScript(_ source: String, timeout: Double) -> (Int32, String) {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+    process.arguments = ["-e", source]
+    let errors = Pipe()
+    process.standardError = errors
+    process.standardOutput = FileHandle.nullDevice
+    let finished = DispatchSemaphore(value: 0)
+    process.terminationHandler = { _ in finished.signal() }
+    do {
+        try process.run()
+    } catch {
+        return (-1, error.localizedDescription)
+    }
+    // Read while it runs, so a long error message can't fill the pipe and stall the script.
+    var text = Data()
+    let read = DispatchSemaphore(value: 0)
+    DispatchQueue.global().async {
+        text = errors.fileHandleForReading.readDataToEndOfFile()
+        read.signal()
+    }
+    if finished.wait(timeout: .now() + timeout) == .timedOut {
+        process.terminate()
+        // Make sure it has gone before the job moves on.
+        if finished.wait(timeout: .now() + 3) == .timedOut {
+            kill(process.processIdentifier, SIGKILL)
+            _ = finished.wait(timeout: .now() + 3)
+        }
+        return (-2, "Photos didn't answer in time")
+    }
+    guard read.wait(timeout: .now() + 5) == .success else { return (process.terminationStatus, "") }
+    return (process.terminationStatus, String(data: text, encoding: .utf8) ?? "")
+}
+
+/// Writes the pieces of a file PhotoKit hands over. Once a write has failed, or the file has been finished or
+/// abandoned, any further pieces are dropped rather than written to a closed file, and a failed write is
+/// reported instead of stopping the app.
+final class Sink {
+    private let lock = NSLock()
+    private var handle: FileHandle?
+    private var error: Error?
+
+    init(_ handle: FileHandle) { self.handle = handle }
+
+    func write(_ data: Data) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let handle = handle, error == nil else { return }
+        do { try handle.write(contentsOf: data) } catch { self.error = error }
+    }
+
+    /// The first write that failed, if any.
+    var problem: Error? {
+        lock.lock()
+        defer { lock.unlock() }
+        return error
+    }
+
+    /// Makes sure everything has reached the disk, then closes the file. Returns what went wrong, if anything.
+    func finish() -> Error? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let handle = handle else { return error }
+        self.handle = nil
+        do {
+            try handle.synchronize()
+            try handle.close()
+        } catch {
+            self.error = self.error ?? error
+        }
+        return self.error
+    }
+
+    /// Closes the file without checking it, for a copy that is being abandoned.
+    func close() {
+        lock.lock()
+        defer { lock.unlock() }
+        try? handle?.close()
+        handle = nil
+    }
+}
+
 final class Job {
     let id: Int
     let assetId: String
     let name: String
     let originalBytes: Int64
     let original: Item
+    /// What the job does: "video" re-encodes a video, "photo" makes a HEIC copy of a RAW or JPEG photo or of a
+    /// Live Photo's still, and "archive" copies the item's files into a folder and then deletes it.
+    let kind: String
+    var isPhoto: Bool { kind == "photo" }
+    var isArchive: Bool { kind == "archive" }
+    /// For an archive job, the folder the files go into.
+    let folder: URL?
     let settings: ShrinkSettings
-    /// Encode only and leave the file in the temporary folder, without touching the library.
+    /// Encode only and leave the file in the temporary folder, without touching the library. For an archive
+    /// job, copy the files but keep the original.
     let dryRun: Bool
     /// Ask Photos to delete the original once the smaller copy is safely in the library.
     let deleteOriginal: Bool
@@ -783,8 +1242,19 @@ final class Job {
     var state = "queued"  // queued, downloading, encoding, saving, done, skipped, failed, cancelled
     var progress = 0.0
     var message = ""
+    /// Something worth knowing about a finished job that isn't a failure, such as captions that weren't copied.
+    var note = ""
     var newBytes: Int64 = 0
     var newItem: Item?
+    /// The files an archive job wrote, and their sizes, which are checked again just before the original is deleted.
+    var files: [String] = []
+    var fileSizes: [Int64] = []
+    /// What the original looked like when it was copied (see `Converter.fingerprint`). If it has changed by the
+    /// time the queue is done, the copy is out of date and the original is kept.
+    var source: String?
+    /// What a photo's copy is: "raw" for one developed from a RAW file, "heic" for a JPEG turned into a HEIC,
+    /// "still" for a Live Photo's HEIC still kept as it was. For the history.
+    var made = ""
     var cancelled = false
     var originalDeleted = false
     /// The smaller copy this job made has since been deleted, so the video counts as not shrunk again.
@@ -806,34 +1276,50 @@ final class Job {
 
     /// What the history keeps about this attempt once it has ended.
     var record: [String: Any] {
-        [
-            "type": "shrink", "outcome": state, "message": message, "assetId": assetId, "name": name,
-            "originalBytes": originalBytes, "newBytes": newBytes, "newId": newItem?.id ?? "",
+        if isArchive {
+            return [
+                "type": "archive", "outcome": state, "message": message, "assetId": assetId, "name": name,
+                "bytes": originalBytes, "video": original.isVideo, "folder": folder?.path ?? "", "files": files,
+                "downloadSeconds": Int(phases["downloading"] ?? 0),
+            ]
+        }
+        return [
+            "type": "shrink", "kind": kind, "made": made, "outcome": state, "message": message,
+            "assetId": assetId, "name": name, "originalBytes": originalBytes, "newBytes": newBytes, "newId": newItem?.id ?? "",
             "settings": settings.json, "downloadSeconds": Int(phases["downloading"] ?? 0),
             "encodeSeconds": Int(phases["encoding"] ?? 0),
         ]
     }
 
-    init(id: Int, item: Item, settings: ShrinkSettings, dryRun: Bool, deleteOriginal: Bool) {
+    init(id: Int, item: Item, settings: ShrinkSettings, dryRun: Bool, deleteOriginal: Bool, folder: URL? = nil) {
         self.id = id
         self.deleteOriginal = deleteOriginal && !dryRun
         assetId = item.id
         name = item.name
         originalBytes = item.bytes
         original = item
+        kind = folder != nil ? "archive" : item.isVideo ? "video" : "photo"
+        self.folder = folder
         self.settings = settings
         self.dryRun = dryRun
     }
 
-    var isActive: Bool { ["queued", "downloading", "encoding", "saving"].contains(state) }
+    // A switch rather than a list, since a long queue asks this of every job many times over.
+    var isActive: Bool {
+        switch state {
+        case "queued", "downloading", "encoding", "saving": return true
+        default: return false
+        }
+    }
 
     var json: [String: Any] {
         [
-            "id": id, "assetId": assetId, "name": name, "state": state, "progress": progress, "message": message,
+            "id": id, "assetId": assetId, "name": name, "kind": kind, "state": state,
+            "progress": progress, "message": message, "note": note,
             "originalBytes": originalBytes, "newBytes": newBytes, "newItem": newItem?.json ?? NSNull(),
             "item": original.json, "dryRun": dryRun, "settings": settings.json, "originalDeleted": originalDeleted, "copyDeleted": copyDeleted,
             "seconds": Int(Date().timeIntervalSince(stateSince)), "remaining": remainingSeconds ?? NSNull(),
-            "deleteOriginal": deleteOriginal, "deletion": deletion,
+            "deleteOriginal": deleteOriginal, "deletion": deletion, "folder": folder?.path ?? NSNull(), "files": files.count,
         ]
     }
 }
@@ -848,33 +1334,77 @@ final class Converter {
     private var nextId = 1
     /// Finished jobs whose originals are to be deleted once nothing else is running.
     private var awaitingDeletion: [Job] = []
+    /// Jobs added since the queue was last empty, for the summary once it is empty again.
+    private var currentRun: [Job] = []
+    /// An update of the Dock badge is on its way (guarded by `lock`), and the number it last showed (main thread).
+    private var badgeScheduled = false
+    private var shownCount = 0
+    /// Told on the main thread how many jobs are still to do whenever that changes, for the Dock badge.
+    var onActiveCount: ((Int) -> Void)?
+    /// Told on the main thread once the queue has run dry: the jobs that ended since it last did, and how many
+    /// originals are now waiting for the deletion confirmation. For the notification.
+    var onFinished: ((_ ended: [Job], _ awaitingConfirmation: Int) -> Void)?
 
     init(library: Library, history: History) {
         self.library = library
         self.history = history
     }
 
-    /// `deleteOriginal` applies to every video in the request; `deleteOriginalIds` names the ones picked
-    /// for it one by one. Either is enough for a video's original to be deleted after its shrink.
+    /// `deleteOriginal` applies to every item in the request; `deleteOriginalIds` names the ones picked for it
+    /// one by one. Either is enough for an original to be deleted after its compression.
     func enqueue(ids: [String], settings: ShrinkSettings, dryRun: Bool, deleteOriginal: Bool, deleteOriginalIds: Set<String> = []) -> Int {
-        var added = 0
-        for id in ids {
-            guard let item = library.item(id), item.isVideo else { continue }
-            lock.lock()
-            let busy = jobs.contains { $0.assetId == id && $0.isActive }
-            let job = Job(id: nextId, item: item, settings: settings, dryRun: dryRun, deleteOriginal: deleteOriginal || deleteOriginalIds.contains(id))
-            if !busy {
-                // A fresh attempt replaces the rows left by earlier ones that didn't finish.
-                jobs.removeAll { $0.assetId == id && ["failed", "cancelled", "skipped"].contains($0.state) }
-                nextId += 1
-                jobs.append(job)
-            }
-            lock.unlock()
-            if busy { continue }
-            added += 1
-            queue.async { self.run(job) }
+        add(ids.compactMap { library.item($0) }.filter { $0.isCompressible }) { id, item in
+            Job(id: id, item: item, settings: settings, dryRun: dryRun, deleteOriginal: deleteOriginal || deleteOriginalIds.contains(item.id))
         }
-        return added
+    }
+
+    /// Copies each item's files into `folder`, then deletes the item once the queue is done, after one
+    /// confirmation for all of them. A test run copies the files and keeps the items.
+    func enqueueArchive(ids: [String], folder: URL, dryRun: Bool) -> Int {
+        add(ids.compactMap { library.item($0) }) { id, item in
+            Job(id: id, item: item, settings: ShrinkSettings([:]), dryRun: dryRun, deleteOriginal: true, folder: folder)
+        }
+    }
+
+    /// Queues the job `make` builds for each item that hasn't one running already, and returns how many were
+    /// queued. A fresh attempt replaces the rows left by earlier ones that didn't finish. It's all done in one
+    /// pass, since picking many at once can mean thousands of items.
+    private func add(_ items: [Item], _ make: (Int, Item) -> Job) -> Int {
+        lock.lock()
+        var busy = Set(jobs.lazy.filter { $0.isActive }.map { $0.assetId })
+        var made: [Job] = []
+        for item in items where !busy.contains(item.id) {
+            busy.insert(item.id)  // the same item twice in one request is queued once
+            made.append(make(nextId, item))
+            nextId += 1
+        }
+        let fresh = Set(made.map { $0.assetId })
+        jobs.removeAll { fresh.contains($0.assetId) && ["failed", "cancelled", "skipped"].contains($0.state) }
+        jobs += made
+        currentRun += made
+        lock.unlock()
+        for job in made { queue.async { self.run(job) } }
+        reportActiveCount()
+        return made.count
+    }
+
+    /// Tells the Dock badge how many jobs are left. A long queue changes all the time, so updates are gathered up
+    /// and the count is taken when the update runs, which also keeps a late update from showing an old number.
+    private func reportActiveCount() {
+        lock.lock()
+        let scheduled = badgeScheduled
+        badgeScheduled = true
+        lock.unlock()
+        if scheduled { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            self.lock.lock()
+            self.badgeScheduled = false
+            let count = self.jobs.reduce(0) { $0 + ($1.isActive ? 1 : 0) }
+            self.lock.unlock()
+            guard count != self.shownCount else { return }
+            self.shownCount = count
+            self.onActiveCount?(count)
+        }
     }
 
     func list() -> [[String: Any]] {
@@ -894,6 +1424,7 @@ final class Converter {
                 job.message = "Cancelled."
             }
         }
+        reportActiveCount()
     }
 
     var hasActiveJobs: Bool {
@@ -923,17 +1454,68 @@ final class Converter {
         lock.lock()
         let idle = !jobs.contains { $0.isActive }
         let batch = idle ? awaitingDeletion : []
-        if idle { awaitingDeletion = [] }
+        let ended = idle ? currentRun : []
+        if idle {
+            awaitingDeletion = []
+            currentRun = []
+        }
         lock.unlock()
-        guard !batch.isEmpty else { return }
-        delete(ids: batch.map { $0.assetId }) { ok, error in
+        // Hours can pass between a copy being checked and the end of the queue, so each one is checked again.
+        var kept: [(job: Job, reason: String)] = []
+        let ready = batch.filter { job in
+            guard let reason = reasonToKeep(job) else { return true }
+            kept.append((job, reason))
+            return false
+        }
+        if !kept.isEmpty {
+            update { _ in
+                for entry in kept {
+                    entry.job.deletion = "kept"
+                    entry.job.message = entry.reason
+                }
+            }
+            for entry in kept { log("job \(entry.job.id) \(entry.job.name): original kept: \(entry.reason)") }
+        }
+        if !ended.isEmpty { DispatchQueue.main.async { self.onFinished?(ended, ready.count) } }
+        guard !ready.isEmpty else { return }
+        delete(ids: ready.map { $0.assetId }) { ok, error in
             self.update { _ in
-                for job in batch {
+                for job in ready {
                     job.deletion = ok ? "deleted" : "kept"
                     if !ok { job.message = error ?? "Photos didn't delete it." }
                 }
             }
         }
+    }
+
+    /// Why an original lined up for deletion should be kept after all, or nil if its copy still stands: the smaller
+    /// copy or a copied file is gone, or the original has been changed since it was copied.
+    private func reasonToKeep(_ job: Job) -> String? {
+        // Already gone from Photos: there's nothing to keep, and the deletion passes over it.
+        guard let asset = library.asset(job.assetId) else { return nil }
+        if let source = job.source, Converter.fingerprint(asset) != source {
+            return "The original was changed in Photos after it was copied."
+        }
+        if job.isArchive {
+            for (path, size) in zip(job.files, job.fileSizes) {
+                let now = ((try? FileManager.default.attributesOfItem(atPath: path))?[.size] as? NSNumber)?.int64Value
+                if now != size { return "\((path as NSString).lastPathComponent) is no longer in the folder as it was copied." }
+            }
+            return nil
+        }
+        guard let copy = job.newItem, library.asset(copy.id) != nil else { return "The smaller copy is no longer in Photos." }
+        return nil
+    }
+
+    /// What would leave a copy out of date: the original's edits, date, place and favorite flag. Taken when an item
+    /// is copied and again before its original is deleted.
+    static func fingerprint(_ asset: PHAsset) -> String {
+        let edits = PHAssetResource.assetResources(for: asset)
+            .filter { [.adjustmentData, .fullSizePhoto, .fullSizeVideo, .fullSizePairedVideo].contains($0.type) }
+            .map { "\($0.type.rawValue):\(($0.value(forKey: "fileSize") as? NSNumber)?.int64Value ?? 0)" }
+            .sorted()
+        let place = asset.location.map { String(format: "%.6f,%.6f", $0.coordinate.latitude, $0.coordinate.longitude) } ?? "none"
+        return "\(asset.hasAdjustments) \(edits.joined(separator: ",")) \(asset.creationDate?.timeIntervalSince1970 ?? 0) \(place) \(asset.isFavorite)"
     }
 
     /// Catches originals and smaller copies that were deleted somewhere other than this app, so their
@@ -986,6 +1568,7 @@ final class Converter {
         }
         log("job \(job.id) \(job.name): \(state) \(message)")
         if let ended = ended { history.record(ended) }
+        reportActiveCount()
     }
 
     private func isCancelled(_ job: Job) -> Bool {
@@ -996,62 +1579,313 @@ final class Converter {
 
     private func run(_ job: Job) {
         let activity = ProcessInfo.processInfo.beginActivity(
-            options: [.userInitiated, .idleSystemSleepDisabled], reason: "Shrinking a video")
+            options: [.userInitiated, .idleSystemSleepDisabled], reason: job.isArchive ? "Copying originals to a folder" : "Compressing")
         defer { ProcessInfo.processInfo.endActivity(activity) }
-        let output = FileManager.default.temporaryDirectory.appendingPathComponent("photo-review-\(UUID().uuidString).mov")
-        defer { if !job.dryRun { try? FileManager.default.removeItem(at: output) } }
         // Cancelled while it was waiting: already marked, nothing to do, except that it may have been
         // the last thing the originals of earlier videos were waiting for.
         if isCancelled(job) { return deleteOriginalsIfIdle() }
         do {
-            guard let asset = library.asset(job.assetId), asset.mediaType == .video else {
-                throw ShrinkError.failed("This video is no longer in the library.")
+            if job.isArchive { try archive(job) } else { try compress(job) }
+            // Worth a line in the log: the check before deleting will keep this original.
+            if let source = job.source, let asset = library.asset(job.assetId), Converter.fingerprint(asset) != source {
+                log("job \(job.id) \(job.name): the original changed in Photos while it was being copied")
             }
-            // Cheap check before a long download. Assumes 30 fps when the rate is kept, which never overestimates much.
-            let target = job.settings.size(width: asset.pixelWidth, height: asset.pixelHeight)
-            let rate = job.settings.bitrate(width: target.width, height: target.height, fps: job.settings.fps ?? 30)
-            if rate * asset.duration / 8 > Double(job.originalBytes) * 0.8 { throw ShrinkError.nothingToGain }
-
-            set(job, "downloading")
-            let video = try original(of: asset, for: job)
-            _ = library.add(asset)  // re-measure: the original is on this Mac now
-            set(job, "encoding")
-            try encode(
-                video.asset, audioMix: video.audioMix, to: output, settings: job.settings,
-                isCancelled: { self.isCancelled(job) }
-            ) { fraction in
-                self.update { _ in job.progress = fraction }
-            }
-            let attributes = try FileManager.default.attributesOfItem(atPath: output.path)
-            let newBytes = (attributes[.size] as? NSNumber)?.int64Value ?? 0
-            guard newBytes > 0, Double(newBytes) < Double(job.originalBytes) * 0.9 else { throw ShrinkError.nothingToGain }
-
-            var newItem: Item?
-            if !job.dryRun {
-                set(job, "saving")
-                newItem = try save(output, replacing: asset, name: job.name)
-            }
-            update { _ in
-                job.newBytes = newBytes
-                job.newItem = newItem
-                guard job.deleteOriginal, let copy = newItem else { return }
-                // Only let go of an original whose copy runs the same length; anything else needs a human look.
-                if abs(copy.duration - asset.duration) < 1 {
-                    job.deletion = "pending"
-                    awaitingDeletion.append(job)
-                } else {
-                    job.deletion = "kept"
-                    job.message = "The copy's length differs from the original's, so check it before deleting."
-                }
-            }
-            let note = job.dryRun ? output.path : job.message
-            set(job, "done", message: note)
         } catch let error as ShrinkError {
             set(job, error.state, message: error.message)
         } catch {
             set(job, "failed", message: error.localizedDescription)
         }
         deleteOriginalsIfIdle()
+    }
+
+    /// Makes the smaller copy, adds it to Photos with the original's details, and lines the original up for
+    /// deletion if that was asked for.
+    private func compress(_ job: Job) throws {
+        let output = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "photo-review-\(UUID().uuidString).\(job.isPhoto ? "heic" : "mov")")
+        defer { if !job.dryRun { try? FileManager.default.removeItem(at: output) } }
+        let asset = try job.isPhoto ? compressPhoto(job, to: output) : compressVideo(job, to: output)
+        // Cancelled just as the copy was finished: nothing goes into Photos.
+        if isCancelled(job) { throw ShrinkError.cancelled }
+        let attributes = try FileManager.default.attributesOfItem(atPath: output.path)
+        let newBytes = (attributes[.size] as? NSNumber)?.int64Value ?? 0
+        guard newBytes > 0, Double(newBytes) < Double(job.originalBytes) * 0.9 else {
+            throw job.isPhoto ? ShrinkError(state: "skipped", message: "A copy wouldn't be meaningfully smaller, so it was skipped.") : ShrinkError.nothingToGain
+        }
+
+        var newItem: Item?
+        var detailsCopied = true
+        if !job.dryRun {
+            set(job, "saving")
+            newItem = try save(output, replacing: asset, name: job.name, photo: job.isPhoto)
+            // Titles, captions and keywords live where PhotoKit can't reach them; Photos' scripting can.
+            if let copy = newItem, let problem = copyDetails(from: job.assetId, to: copy.id) {
+                detailsCopied = false
+                update { _ in job.note = problem }
+            }
+        }
+        update { _ in
+            job.newBytes = newBytes
+            job.newItem = newItem
+            guard job.deleteOriginal, let copy = newItem else { return }
+            // Only let go of an original whose copy matches it: the same length for a video, the same shape
+            // for a photo, and its titles, captions and keywords. Anything else needs a human look.
+            let originalShape = Double(asset.pixelWidth) / Double(max(asset.pixelHeight, 1))
+            let copyShape = Double(copy.width) / Double(max(copy.height, 1))
+            let matches = job.isPhoto ? copy.width > 0 && abs(copyShape / originalShape - 1) < 0.02 : abs(copy.duration - asset.duration) < 1
+            job.deletion = "kept"
+            if job.cancelled {
+                // The copy is already in Photos and stays, but a cancelled job doesn't go on to delete anything.
+                job.message = "Cancelled after the copy was added to Photos."
+            } else if !matches {
+                job.message = job.isPhoto
+                    ? "The copy's shape differs from the original's, so check it before deleting."
+                    : "The copy's length differs from the original's, so check it before deleting."
+            } else if !detailsCopied {
+                job.message = "Check the new copy, then delete the original."
+            } else {
+                job.deletion = "pending"
+                awaitingDeletion.append(job)
+            }
+        }
+        set(job, "done", message: job.dryRun ? output.path : job.message)
+    }
+
+    /// Copies an item's files into a folder for its year inside the chosen one, checks each copy, and then lines
+    /// the item up for deletion like Compress & delete. The original and any edited version are both kept, and a
+    /// Live Photo keeps its video.
+    private func archive(_ job: Job) throws {
+        guard let folder = job.folder else { throw ShrinkError.failed("No folder was chosen.") }
+        guard let asset = library.asset(job.assetId) else { throw ShrinkError.failed("This item is no longer in the library.") }
+        let source = Converter.fingerprint(asset)
+        let kept: [PHAssetResourceType] = [.photo, .video, .alternatePhoto, .pairedVideo, .audio, .fullSizePhoto, .fullSizeVideo, .fullSizePairedVideo]
+        let resources = PHAssetResource.assetResources(for: asset).filter { kept.contains($0.type) }
+        guard !resources.isEmpty else { throw ShrinkError.failed("Photos has no files for this item.") }
+        let sizes = resources.map { ($0.value(forKey: "fileSize") as? NSNumber)?.int64Value ?? 0 }
+        let total = max(sizes.reduce(0, +), 1)
+        if let free = freeSpace(at: folder), free < total + 200_000_000 {
+            throw ShrinkError.failed(String(format: "Not enough space in that folder: it needs about %.1f GB and %.1f GB is free.", Double(total) / 1e9, Double(free) / 1e9))
+        }
+        let date = asset.creationDate
+        let place = folder.appendingPathComponent(date.map { String(Calendar.current.component(.year, from: $0)) } ?? "No date", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: place, withIntermediateDirectories: true)
+        } catch {
+            throw ShrinkError.failed("Couldn't make a folder there: " + error.localizedDescription)
+        }
+        set(job, "downloading")
+        var written: [URL] = []
+        var writtenSizes: [Int64] = []
+        var copiedBytes: Int64 = 0
+        do {
+            for (resource, size) in zip(resources, sizes) {
+                // The edited version is named after the item, since Photos calls every one of them FullSizeRender.
+                let edited = [.fullSizePhoto, .fullSizeVideo, .fullSizePairedVideo].contains(resource.type)
+                let fileExtension = (resource.originalFilename as NSString).pathExtension
+                let fileName = edited
+                    ? (job.name as NSString).deletingPathExtension + " (edited)" + (fileExtension.isEmpty ? "" : "." + fileExtension)
+                    : resource.originalFilename
+                let target = Converter.freeName(fileName, in: place)
+                // Written under a temporary name and given its own only once it's complete and checked, so a copy
+                // that was cut short, even by the app quitting, never looks like a finished one.
+                let partial = place.appendingPathComponent(target.lastPathComponent + ".partial")
+                written.append(partial)
+                let before = copiedBytes
+                try fetch(resource, to: partial, for: job) { fraction in
+                    self.update { _ in job.progress = (Double(before) + fraction * Double(size)) / Double(total) }
+                }
+                // A copy that came out the wrong size isn't one to delete the original over.
+                let copied = ((try? FileManager.default.attributesOfItem(atPath: partial.path))?[.size] as? NSNumber)?.int64Value ?? 0
+                guard copied > 0, size == 0 || copied == size else {
+                    throw ShrinkError.failed("The copy of \(fileName) came out the wrong size, so the original was kept.")
+                }
+                try FileManager.default.moveItem(at: partial, to: target)
+                written[written.count - 1] = target
+                if let date = date { try? FileManager.default.setAttributes([.creationDate: date, .modificationDate: date], ofItemAtPath: target.path) }
+                writtenSizes.append(copied)
+                copiedBytes += copied
+            }
+            // Cancelled once everything was copied: the copies go again, and the original stays as it was.
+            if isCancelled(job) { throw ShrinkError.cancelled }
+        } catch {
+            // Unfinished copies are removed so they aren't taken for complete ones.
+            for file in written { try? FileManager.default.removeItem(at: file) }
+            throw error
+        }
+        _ = library.add(asset)  // re-measure: the original is on this Mac now
+        update { _ in
+            job.files = written.map { $0.path }
+            job.fileSizes = writtenSizes
+            job.source = source
+            job.newBytes = copiedBytes
+            if job.deleteOriginal && !job.cancelled {
+                job.deletion = "pending"
+                awaitingDeletion.append(job)
+            }
+        }
+        set(job, "done", message: job.dryRun ? "Copied to \(place.path). Test run: the original stays." : "")
+    }
+
+    /// `name` in `folder`, or "name (2)" and so on when that is taken, so nothing already there is overwritten.
+    static func freeName(_ name: String, in folder: URL) -> URL {
+        let stem = (name as NSString).deletingPathExtension, fileExtension = (name as NSString).pathExtension
+        var candidate = folder.appendingPathComponent(name)
+        var number = 2
+        while FileManager.default.fileExists(atPath: candidate.path) {
+            candidate = folder.appendingPathComponent("\(stem) (\(number))" + (fileExtension.isEmpty ? "" : "." + fileExtension))
+            number += 1
+        }
+        return candidate
+    }
+
+    /// Downloads the video if needed and re-encodes it into `output`. Returns the original's asset.
+    private func compressVideo(_ job: Job, to output: URL) throws -> PHAsset {
+        guard let asset = library.asset(job.assetId), asset.mediaType == .video else {
+            throw ShrinkError.failed("This video is no longer in the library.")
+        }
+        // Cheap check before a long download. Assumes 30 fps when the rate is kept, which never overestimates much.
+        let target = job.settings.size(width: asset.pixelWidth, height: asset.pixelHeight)
+        let rate = job.settings.bitrate(width: target.width, height: target.height, fps: job.settings.fps ?? 30)
+        if rate * asset.duration / 8 > Double(job.originalBytes) * 0.8 { throw ShrinkError.nothingToGain }
+
+        let source = Converter.fingerprint(asset)
+        update { _ in job.source = source }
+        set(job, "downloading")
+        let video = try original(of: asset, for: job)
+        _ = library.add(asset)  // re-measure: the original is on this Mac now
+        set(job, "encoding")
+        try encode(
+            video.asset, audioMix: video.audioMix, to: output, settings: job.settings,
+            isCancelled: { self.isCancelled(job) }
+        ) { fraction in
+            self.update { _ in job.progress = fraction }
+        }
+        return asset
+    }
+
+    /// Makes a HEIC copy of a photo at `output`: a RAW photo developed afresh, or the still of a JPEG or Live
+    /// Photo. Returns the original's asset.
+    private func compressPhoto(_ job: Job, to output: URL) throws -> PHAsset {
+        guard let asset = library.asset(job.assetId), asset.mediaType == .image else {
+            throw ShrinkError.failed("This photo is no longer in the library.")
+        }
+        let resources = PHAssetResource.assetResources(for: asset)
+        // A RAW+JPEG pair holds two pictures, the RAW file and the camera's own JPEG, whichever Photos shows.
+        if resources.contains(where: { $0.type == .alternatePhoto }) {
+            throw ShrinkError(state: "skipped", message: "This photo keeps a RAW file and a JPEG together, and a copy would keep only one of them.")
+        }
+        let source = Converter.fingerprint(asset)
+        update { _ in job.source = source }
+        if !job.original.isRaw {
+            try stillCopy(job, asset, to: output)
+            return asset
+        }
+        // A copy developed from the RAW file would come out without the edits made to it in Photos.
+        if asset.hasAdjustments {
+            throw ShrinkError(state: "skipped", message: "This photo has edits in Photos, which a copy made from the RAW file would lose.")
+        }
+        guard let raw = resources.first(where: { $0.type == .photo && (UTType($0.uniformTypeIdentifier)?.conforms(to: .rawImage) ?? false) })
+        else { throw ShrinkError.failed("This photo has no RAW original to compress.") }
+        set(job, "downloading")
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "photo-review-\(UUID().uuidString).\((raw.originalFilename as NSString).pathExtension)")
+        defer { try? FileManager.default.removeItem(at: file) }
+        try fetch(raw, to: file, for: job)
+        _ = library.add(asset)  // re-measure: the original is on this Mac now
+        set(job, "encoding")
+        try developRAW(file, to: output, settings: job.settings)
+        update { _ in job.made = "raw" }
+        return asset
+    }
+
+    /// A HEIC copy of a JPEG photo, or of a Live Photo's still without its video. A still that is already HEIC
+    /// is kept exactly as it is; a JPEG is converted, which loses a little quality. Edits are baked in, as they
+    /// are for videos.
+    private func stillCopy(_ job: Job, _ asset: PHAsset, to output: URL) throws {
+        set(job, "downloading")
+        let options = PHImageRequestOptions()
+        options.version = .current
+        options.deliveryMode = .highQualityFormat
+        options.isNetworkAccessAllowed = true
+        options.progressHandler = { fraction, _, _, _ in
+            self.update { _ in
+                job.progress = fraction
+                if job.paceFrom == nil { job.paceFrom = (fraction, Date()) }
+            }
+        }
+        let arrived = DispatchSemaphore(value: 0)
+        var result: (data: Data?, type: String?, orientation: CGImagePropertyOrientation, info: [AnyHashable: Any]?) = (nil, nil, .up, nil)
+        let request = PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { data, type, orientation, info in
+            result = (data, type, orientation, info)
+            arrived.signal()
+        }
+        while arrived.wait(timeout: .now() + 0.5) == .timedOut {
+            if isCancelled(job) {
+                PHImageManager.default().cancelImageRequest(request)
+                throw ShrinkError.cancelled
+            }
+        }
+        if isCancelled(job) { throw ShrinkError.cancelled }
+        guard let data = result.data else {
+            throw ShrinkError.failed("Couldn't get the photo from Photos: " + Converter.describe(result.info?[PHImageErrorKey] as? NSError))
+        }
+        _ = library.add(asset)  // re-measure: the original is on this Mac now
+        set(job, "encoding")
+        // Photos can show a photo turned another way than its file says, and the copy has to look the way Photos shows it.
+        let embedded = CGImageSourceCreateWithData(data as CFData, nil)
+            .flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) as? [String: Any] }
+            .flatMap { $0[kCGImagePropertyOrientation as String] as? UInt32 }
+            .flatMap(CGImagePropertyOrientation.init(rawValue:)) ?? .up
+        let turned = result.orientation != embedded ? result.orientation : nil
+        if let turned = turned { log("job \(job.id) \(job.name): Photos shows it turned \(turned.rawValue), its file says \(embedded.rawValue)") }
+        if let type = result.type, UTType(type)?.conforms(to: .heic) == true, turned == nil {
+            try data.write(to: output)
+            update { _ in job.made = "still" }
+        } else {
+            try convertToHEIC(data, to: output, settings: job.settings, orientation: turned)
+            update { _ in job.made = "heic" }
+        }
+    }
+
+    /// Copies a resource's original file out of Photos into `file`, downloading it from iCloud if it isn't on
+    /// this Mac. Unlike a video download it's seconds rather than hours, so one try is enough. `progress`, if
+    /// given, is told how far along this file is instead of the job's bar being set directly.
+    private func fetch(_ resource: PHAssetResource, to file: URL, for job: Job, progress: ((Double) -> Void)? = nil) throws {
+        let options = PHAssetResourceRequestOptions()
+        options.isNetworkAccessAllowed = true
+        options.progressHandler = { fraction in
+            if let progress = progress { return progress(fraction) }
+            self.update { _ in
+                job.progress = fraction
+                if job.paceFrom == nil { job.paceFrom = (fraction, Date()) }
+            }
+        }
+        guard FileManager.default.createFile(atPath: file.path, contents: nil), let handle = try? FileHandle(forWritingTo: file) else {
+            throw ShrinkError.failed("Couldn't make a file to copy the original into.")
+        }
+        let sink = Sink(handle)
+        defer { sink.close() }
+        let finished = DispatchSemaphore(value: 0)
+        var failure: NSError?
+        let request = PHAssetResourceManager.default().requestData(for: resource, options: options) { data in
+            sink.write(data)
+        } completionHandler: { error in
+            failure = error as NSError?
+            finished.signal()
+        }
+        while finished.wait(timeout: .now() + 0.5) == .timedOut {
+            // A write that failed, on a full or unplugged drive say, stops the download as well.
+            if isCancelled(job) || sink.problem != nil {
+                PHAssetResourceManager.default().cancelDataRequest(request)
+                // Photos may still be handing data over; the sink drops whatever comes after this.
+                _ = finished.wait(timeout: .now() + 10)
+                break
+            }
+        }
+        if isCancelled(job) { throw ShrinkError.cancelled }
+        if let problem = sink.problem { throw ShrinkError.failed("Couldn't write the copy: " + problem.localizedDescription) }
+        if let failure = failure { throw ShrinkError.failed("Couldn't download the original from iCloud: " + Converter.describe(failure)) }
+        if let problem = sink.finish() { throw ShrinkError.failed("Couldn't finish writing the copy: " + problem.localizedDescription) }
     }
 
     /// The full-quality video with any edits applied, downloaded from iCloud if it isn't on this Mac.
@@ -1136,24 +1970,25 @@ final class Converter {
         }
     }
 
-    /// Adds the encoded file to Photos as a new video carrying the original's date, location, favorite flag and albums.
-    private func save(_ file: URL, replacing original: PHAsset, name: String) throws -> Item {
+    /// Adds the encoded file to Photos as a new video or photo carrying the original's date, location, favorite
+    /// flag and albums.
+    private func save(_ file: URL, replacing original: PHAsset, name: String, photo: Bool) throws -> Item {
         var newId: String?
         try PHPhotoLibrary.shared().performChangesAndWait {
             let request = PHAssetCreationRequest.forAsset()
             let options = PHAssetResourceCreationOptions()
-            options.originalFilename = (name as NSString).deletingPathExtension + " (compressed).mov"
+            options.originalFilename = (name as NSString).deletingPathExtension + (photo ? " (compressed).heic" : " (compressed).mov")
             options.shouldMoveFile = true
-            request.addResource(with: .video, fileURL: file, options: options)
+            request.addResource(with: photo ? .photo : .video, fileURL: file, options: options)
             request.creationDate = original.creationDate
             request.location = original.location
             request.isFavorite = original.isFavorite
             newId = request.placeholderForCreatedAsset?.localIdentifier
         }
         guard let id = newId, let created = library.asset(id) else {
-            throw ShrinkError.failed("Photos didn't accept the new video.")
+            throw ShrinkError.failed(photo ? "Photos didn't accept the new photo." : "Photos didn't accept the new video.")
         }
-        // Best effort: an album that refuses the addition shouldn't undo the new video.
+        // Best effort: an album that refuses the addition shouldn't undo the new copy.
         let albums = PHAssetCollection.fetchAssetCollectionsContaining(original, with: .album, options: nil)
         albums.enumerateObjects { album, _, _ in
             guard album.canPerform(.addContent) else { return }
@@ -1204,7 +2039,8 @@ struct Request {
 
 final class Server {
     private let library: Library
-    private let converter: Converter
+    /// The app listens to it for the Dock badge and the notification when the queue is done.
+    let converter: Converter
     private let history = History()
     private let queue = DispatchQueue(label: "http", attributes: .concurrent)
     private var listener: NWListener?
@@ -1213,6 +2049,8 @@ final class Server {
     private let icon: Data
     /// Called on the main thread with nil once the port is open, or with the reason it couldn't be.
     var onStart: ((String?) -> Void)?
+    /// Asks the person to pick a folder (the app shows its own panel) and calls back with it, or nil.
+    var chooseFolder: ((@escaping (URL?) -> Void) -> Void)?
     var hasActiveJobs: Bool { converter.hasActiveJobs }
 
     init(library: Library) {
@@ -1309,6 +2147,7 @@ final class Server {
             let query = {
                 self.library.query(
                     kind: request.query["kind"] ?? "all", year: Int(request.query["year"] ?? ""),
+                    minBytes: Int64(request.query["minBytes"] ?? "") ?? 0,
                     offset: Int(request.query["offset"] ?? "") ?? 0, limit: min(Int(request.query["limit"] ?? "") ?? 60, 2000))
             }
             var result = query()
@@ -1336,6 +2175,11 @@ final class Server {
                     return item
                 }
             }
+            // Compressing downloads each original first, so Pick many keeps a batch to what fits. The Photos library
+            // is nearly always on the startup disk, which is what the home folder is on. This is the space free now,
+            // not counting what macOS could clear later, so a batch can't fill the disk if it doesn't.
+            let free = (try? FileManager.default.homeDirectoryForCurrentUser.resourceValues(forKeys: [.volumeAvailableCapacityKey]))?.volumeAvailableCapacity
+            result["freeBytes"] = free ?? NSNull()
             sendJSON(connection, result)
         case ("GET", "/thumb"):
             let size = min(max(Int(request.query["size"] ?? "") ?? 480, 64), 2400)
@@ -1362,10 +2206,33 @@ final class Server {
                 ids: payload["ids"] as? [String] ?? [], settings: ShrinkSettings(payload),
                 dryRun: payload["dryRun"] as? Bool ?? false, deleteOriginal: payload["deleteOriginal"] as? Bool ?? false,
                 deleteOriginalIds: Set(payload["deleteOriginalIds"] as? [String] ?? []))
-            sendJSON(connection, ["ok": started > 0, "started": started, "error": started > 0 ? "" : "No videos to compress."])
+            // Copies get their titles, captions and keywords through Photos, which macOS asks about once: ask now.
+            if started > 0, payload["dryRun"] as? Bool != true { photosControl.queueStarted() }
+            sendJSON(connection, ["ok": started > 0, "started": started, "error": started > 0 ? "" : "No videos or RAW photos to compress."])
         case ("GET", "/api/jobs"):
             converter.checkOriginals()
             sendJSON(connection, ["jobs": converter.list()])
+        case ("POST", "/api/archive"):
+            let payload = (try? JSONSerialization.jsonObject(with: request.body)) as? [String: Any] ?? [:]
+            var isFolder: ObjCBool = false
+            guard let path = payload["folder"] as? String, FileManager.default.fileExists(atPath: path, isDirectory: &isFolder), isFolder.boolValue else {
+                return sendJSON(connection, ["ok": false, "error": "That folder isn't there any more."], status: 400)
+            }
+            let started = converter.enqueueArchive(
+                ids: payload["ids"] as? [String] ?? [], folder: URL(fileURLWithPath: path, isDirectory: true),
+                dryRun: payload["dryRun"] as? Bool ?? false)
+            sendJSON(connection, ["ok": started > 0, "started": started, "error": started > 0 ? "" : "Nothing to copy."])
+        case ("POST", "/api/choose-folder"):
+            DispatchQueue.main.async {
+                guard let choose = self.chooseFolder else {
+                    return self.sendJSON(connection, ["ok": false, "error": "Choosing a folder isn't available."])
+                }
+                choose { folder in
+                    self.sendJSON(connection, folder.map { ["ok": true, "path": $0.path] } ?? ["ok": false, "error": ""])
+                }
+            }
+        case ("GET", "/api/version"):
+            sendJSON(connection, updates.json)
         case ("POST", "/api/update"):
             sendJSON(connection, ["ok": library.update()])
         case ("POST", "/api/jobs/cancel"):
@@ -1463,45 +2330,61 @@ final class Server {
 
 // MARK: - App
 
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate,
+    UNUserNotificationCenterDelegate
+{
     private let library = Library()
     private var server: Server?
     private var window: NSWindow!
-    private var label: NSTextField!
-    private var button: NSButton!
+    private var webView: WKWebView!
+    private var titleWatch: NSKeyValueObservation?
     private var quitConfirmed = false
+    private var askedForNotifications = false
+    private var updateTimer: Timer?
+    private let automaticUpdates = "checkForUpdates"
+    private let home = URL(string: "http://127.0.0.1:\(port)/")!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let menu = NSMenu()
-        let appItem = NSMenuItem()
-        menu.addItem(appItem)
-        appItem.submenu = NSMenu()
-        appItem.submenu?.addItem(withTitle: "Quit Photo Review", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        NSApp.mainMenu = menu
+        UserDefaults.standard.register(defaults: [automaticUpdates: true])
+        UNUserNotificationCenter.current().delegate = self
+        NSApp.mainMenu = makeMenu()
 
-        label = NSTextField(wrappingLabelWithString: "Starting…")
-        // Selectable text is what makes a link inside it clickable.
-        label.isSelectable = true
-        label.allowsEditingTextAttributes = true
-        button = NSButton(title: "Open in Browser", target: self, action: #selector(openBrowser))
-        button.isEnabled = false
-        let stack = NSStackView(views: [label, button])
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 14
-        stack.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
+        // The pages the app serves are its interface, shown in its own window rather than a browser tab.
+        let configuration = WKWebViewConfiguration()
+        configuration.mediaTypesRequiringUserActionForPlayback = []
+        configuration.preferences.isElementFullscreenEnabled = true
+        webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.navigationDelegate = self
+        webView.uiDelegate = self
+        webView.allowsBackForwardNavigationGestures = true
+        webView.underPageBackgroundColor = .windowBackgroundColor
+
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 400, height: 150), styleMask: [.titled, .closable, .miniaturizable],
-            backing: .buffered, defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 1280, height: 860),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "Photo Review"
+        window.minSize = NSSize(width: 720, height: 480)
         window.isReleasedWhenClosed = false
         window.delegate = self
-        window.contentView = stack
-        window.center()
-        window.makeKeyAndOrderFront(nil)
+        window.contentView = webView
+        window.tabbingMode = .disallowed
+        // Comes back at the size and place it was left.
+        if !window.setFrameUsingName("Photo Review") { window.center() }
+        window.setFrameAutosaveName("Photo Review")
+        titleWatch = webView.observe(\.title) { [weak self] view, _ in
+            self?.window.title = view.title.flatMap { $0.isEmpty ? nil : $0 } ?? "Photo Review"
+        }
+        webView.loadHTMLString(AppDelegate.notice("Starting…"), baseURL: nil)
+        // Started with --no-open (after an update, say), the app waits in the Dock until it's clicked.
+        if !CommandLine.arguments.contains("--no-open") { window.makeKeyAndOrderFront(nil) }
 
         let server = Server(library: library)
         server.onStart = { [weak self] problem in self?.started(problem) }
+        server.converter.onActiveCount = { [weak self] count in self?.queueChanged(count) }
+        server.converter.onFinished = { [weak self] ended, confirming in self?.queueFinished(ended, confirming) }
+        server.chooseFolder = { [weak self] completion in
+            if let self = self { self.chooseFolder(completion) } else { completion(nil) }
+        }
         do {
             try server.start()
             self.server = server
@@ -1513,34 +2396,258 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func started(_ problem: String?) {
         if let problem = problem {
             server = nil
-            button.isEnabled = false
-            label.stringValue =
-                "Photo Review couldn't start on port \(port): \(problem)\n\nAnother copy may already be running. Close this window to quit."
+            webView.loadHTMLString(
+                AppDelegate.notice(
+                    "Photo Review couldn't start: \(problem)",
+                    detail: "Another copy may already be running. Quit this one, then open Photo Review again."),
+                baseURL: nil)
+            window.makeKeyAndOrderFront(nil)
             return
         }
-        let address = "http://127.0.0.1:\(port)"
-        let text = "Photo Review is running at \(address)\n\nKeep this window open while you review. Close it to quit."
-        let message = NSMutableAttributedString(
-            string: text,
-            attributes: [.font: NSFont.systemFont(ofSize: NSFont.systemFontSize), .foregroundColor: NSColor.labelColor])
-        message.addAttributes(
-            [.link: URL(string: address + "/")!, .foregroundColor: NSColor.linkColor, .underlineStyle: NSUnderlineStyle.single.rawValue],
-            range: (text as NSString).range(of: address))
-        label.attributedStringValue = message
-        button.isEnabled = true
         library.start()
-        if !CommandLine.arguments.contains("--no-open") { openBrowser() }
+        webView.load(URLRequest(url: home))
+        scheduleUpdateChecks()
+        // For the log: whether Photos may be controlled, found out only if Photos is open anyway, so nothing is asked.
+        DispatchQueue.global(qos: .utility).async {
+            if PhotosControl.photosIsOpen { log("controlling Photos: \(PhotosControl.ask(prompt: false).rawValue)") }
+        }
     }
 
-    @objc private func openBrowser() {
-        NSWorkspace.shared.open(URL(string: "http://127.0.0.1:\(port)/")!)
+    /// A plain page for the moments before the interface is ready, in the system's own light or dark look.
+    private static func notice(_ message: String, detail: String = "") -> String {
+        func escape(_ text: String) -> String {
+            text.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
+        }
+        return """
+            <!doctype html><meta charset="utf-8"><meta name="color-scheme" content="light dark">
+            <body style="font: 15px -apple-system, sans-serif; display: grid; place-content: center; height: 90vh; text-align: center">
+            <p><b>\(escape(message))</b></p><p style="opacity: .7">\(escape(detail))</p></body>
+            """
     }
 
-    /// Quitting throws away a shrink in progress, including a long download, so ask first.
+    private func isOwnPage(_ url: URL) -> Bool {
+        url.scheme == "http" && (url.host == "127.0.0.1" || url.host == "localhost") && url.port == Int(port)
+    }
+
+    /// Web pages and email, the only kinds of link the pages have. Anything else goes nowhere, rather than being
+    /// handed to whichever app would open it.
+    private func opensElsewhere(_ url: URL) -> Bool {
+        ["https", "http", "mailto"].contains(url.scheme?.lowercased() ?? "")
+    }
+
+    // The app's own pages, and the notice shown while it starts, load here. Links to anything else, such as the
+    // website or Apple's guides, open in the browser.
+    func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        guard let url = action.request.url else { return decisionHandler(.cancel) }
+        if isOwnPage(url) || url.absoluteString == "about:blank" { return decisionHandler(.allow) }
+        if opensElsewhere(url) { NSWorkspace.shared.open(url) }
+        decisionHandler(.cancel)
+    }
+
+    // A link meant for a new window opens in the browser, or in this window if it's one of the app's pages.
+    func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction,
+        windowFeatures: WKWindowFeatures) -> WKWebView? {
+        if let url = action.request.url {
+            if isOwnPage(url) { webView.load(action.request) } else if opensElsewhere(url) { NSWorkspace.shared.open(url) }
+        }
+        return nil
+    }
+
+    // If the page's process quits, show the page again rather than a blank window.
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        if server != nil { webView.load(URLRequest(url: home)) }
+    }
+
+    private func makeMenu() -> NSMenu {
+        func item(_ title: String, _ action: Selector?, _ key: String = "", _ modifiers: NSEvent.ModifierFlags = [.command]) -> NSMenuItem {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
+            item.keyEquivalentModifierMask = modifiers
+            return item
+        }
+        let automatic = item("Check for Updates Automatically", #selector(toggleAutomaticUpdates(_:)))
+        automatic.state = UserDefaults.standard.bool(forKey: automaticUpdates) ? .on : .off
+        let appMenu = NSMenu()
+        for entry in [
+            item("About Photo Review", #selector(NSApplication.orderFrontStandardAboutPanel(_:))),
+            item("Check for Updates…", #selector(checkForUpdates)), automatic, .separator(),
+            item("Hide Photo Review", #selector(NSApplication.hide(_:)), "h"),
+            item("Hide Others", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]),
+            item("Show All", #selector(NSApplication.unhideAllApplications(_:))), .separator(),
+            item("Quit Photo Review", #selector(NSApplication.terminate(_:)), "q"),
+        ] { appMenu.addItem(entry) }
+        // The page's own text fields and selections need these to cut, copy and paste.
+        let editMenu = NSMenu(title: "Edit")
+        for entry in [
+            item("Undo", Selector(("undo:")), "z"), item("Redo", Selector(("redo:")), "z", [.command, .shift]), .separator(),
+            item("Cut", #selector(NSText.cut(_:)), "x"), item("Copy", #selector(NSText.copy(_:)), "c"),
+            item("Paste", #selector(NSText.paste(_:)), "v"), item("Select All", #selector(NSText.selectAll(_:)), "a"),
+        ] { editMenu.addItem(entry) }
+        let viewMenu = NSMenu(title: "View")
+        for entry in [
+            item("Library", #selector(showLibrary), "1"), item("Savings and History", #selector(showSavings), "2"), .separator(),
+            item("Reload Page", #selector(reloadPage), "r"), item("Open in Browser", #selector(openBrowser)), .separator(),
+            item("Enter Full Screen", #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control]),
+        ] { viewMenu.addItem(entry) }
+        let windowMenu = NSMenu(title: "Window")
+        for entry in [
+            item("Minimize", #selector(NSWindow.performMiniaturize(_:)), "m"), item("Zoom", #selector(NSWindow.performZoom(_:))),
+            .separator(), item("Close", #selector(NSWindow.performClose(_:)), "w"),
+        ] { windowMenu.addItem(entry) }
+        let helpMenu = NSMenu(title: "Help")
+        helpMenu.addItem(item("Photo Review Website", #selector(openWebsite)))
+        helpMenu.addItem(item("Report a Problem…", #selector(reportProblem)))
+        NSApp.windowsMenu = windowMenu
+        NSApp.helpMenu = helpMenu
+
+        let menu = NSMenu()
+        for (title, submenu) in [("Photo Review", appMenu), ("Edit", editMenu), ("View", viewMenu), ("Window", windowMenu), ("Help", helpMenu)] {
+            let entry = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+            entry.submenu = submenu
+            menu.addItem(entry)
+        }
+        return menu
+    }
+
+    private func show(_ path: String) {
+        guard server != nil else { return }
+        window.makeKeyAndOrderFront(nil)
+        webView.load(URLRequest(url: home.appendingPathComponent(path)))
+    }
+
+    @objc private func showLibrary() { show("") }
+    @objc private func showSavings() { show("stats") }
+    @objc private func reloadPage() { if server != nil { webView.reload() } }
+    @objc private func openBrowser() { if server != nil { NSWorkspace.shared.open(home) } }
+    @objc private func openWebsite() { NSWorkspace.shared.open(URL(string: "https://danielyaa5.github.io/photo-review/")!) }
+    @objc private func reportProblem() { NSWorkspace.shared.open(URL(string: "https://github.com/danielyaa5/photo-review/issues")!) }
+
+    // MARK: Queue progress
+
+    /// Shows how many jobs are left on the Dock icon. The first time anything is queued is a good moment to ask
+    /// whether the app may say so when it's all done.
+    private func queueChanged(_ count: Int) {
+        NSApp.dockTile.badgeLabel = count > 0 ? String(count) : nil
+        log("dock badge: \(count > 0 ? String(count) : "none")")
+        guard count > 0, !askedForNotifications else { return }
+        askedForNotifications = true
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+            log("notifications \(granted ? "allowed" : "not allowed")\(error.map { ": " + $0.localizedDescription } ?? "")")
+        }
+    }
+
+    /// A long queue usually finishes while nobody is watching, so say how it went, and that the deletion is
+    /// waiting for its confirmation if it is.
+    private func queueFinished(_ ended: [Job], _ confirming: Int) {
+        let sizes = ByteCountFormatter()
+        let done = ended.filter { $0.state == "done" }
+        let compressed = done.filter { !$0.isArchive }, archived = done.filter { $0.isArchive }
+        let smaller = compressed.reduce(Int64(0)) { $0 + max($1.originalBytes - $1.newBytes, 0) }
+        var parts: [String] = []
+        if !compressed.isEmpty { parts.append("\(compressed.count) compressed (\(sizes.string(fromByteCount: smaller)) smaller)") }
+        if !archived.isEmpty { parts.append("\(archived.count) copied to a folder") }
+        let skipped = ended.filter { $0.state == "skipped" }.count, failed = ended.filter { $0.state == "failed" }.count
+        if skipped > 0 { parts.append("\(skipped) skipped") }
+        if failed > 0 { parts.append("\(failed) couldn't be done") }
+        // A queue that was only cancelled has nothing to report.
+        guard !parts.isEmpty else { return }
+        var body = parts.joined(separator: ", ") + "."
+        if confirming > 0 {
+            body += " Confirm deleting \(confirming == 1 ? "1 original" : "\(confirming) originals") in the Photo Review dialog."
+            NSApp.requestUserAttention(.criticalRequest)
+        }
+        let content = UNMutableNotificationContent()
+        content.title = "The queue has finished"
+        content.body = body
+        content.sound = .default
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)) { error in
+            log("notification: \(body)\(error.map { " (not shown: " + $0.localizedDescription + ")" } ?? "")")
+        }
+    }
+
+    // While the window is in front, its queue panel already says all this, so the note only goes in the list.
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler(NSApp.isActive && window.isVisible ? [.list] : [.banner, .list, .sound])
+    }
+
+    // Clicking the notification brings the window back.
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void) {
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        completionHandler()
+    }
+
+    // MARK: Archive
+
+    /// The folder for "Copy to a folder, then delete", picked in the usual Mac panel. The last one is offered again.
+    private func chooseFolder(_ completion: @escaping (URL?) -> Void) {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Copy Here"
+        panel.message = "Choose where to copy the originals, for example a folder on an external drive. Photo Review makes a folder for each year inside it. The files keep their camera details, but not the titles, captions, keywords or albums from Photos."
+        if let last = UserDefaults.standard.string(forKey: "archiveFolder") { panel.directoryURL = URL(fileURLWithPath: last) }
+        func chosen(_ response: NSApplication.ModalResponse) {
+            guard response == .OK, let folder = panel.url else { return completion(nil) }
+            UserDefaults.standard.set(folder.path, forKey: "archiveFolder")
+            completion(folder)
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        if window.isVisible {
+            window.makeKeyAndOrderFront(nil)
+            panel.beginSheetModal(for: window, completionHandler: chosen)
+        } else {
+            chosen(panel.runModal())
+        }
+    }
+
+    // MARK: Updates
+
+    private func scheduleUpdateChecks() {
+        updateTimer?.invalidate()
+        guard UserDefaults.standard.bool(forKey: automaticUpdates) else { return }
+        updates.check()
+        updateTimer = Timer.scheduledTimer(withTimeInterval: 24 * 60 * 60, repeats: true) { _ in updates.check() }
+    }
+
+    @objc private func checkForUpdates() {
+        updates.check { newer, problem in
+            DispatchQueue.main.async {
+                let alert = NSAlert()
+                if let newer = newer {
+                    alert.messageText = "Photo Review \(newer.version) is available"
+                    alert.informativeText = "You have \(updates.current). Download the new version and drag it into Applications, replacing this one."
+                    alert.addButton(withTitle: "Download")
+                    alert.addButton(withTitle: "Later")
+                    if alert.runModal() == .alertFirstButtonReturn { NSWorkspace.shared.open(newer.page) }
+                } else if let problem = problem {
+                    alert.messageText = "Couldn't check for updates"
+                    alert.informativeText = problem
+                    alert.runModal()
+                } else {
+                    alert.messageText = "Photo Review is up to date"
+                    alert.informativeText = "Version \(updates.current) is the newest."
+                    alert.runModal()
+                }
+            }
+        }
+    }
+
+    @objc private func toggleAutomaticUpdates(_ sender: NSMenuItem) {
+        let on = !UserDefaults.standard.bool(forKey: automaticUpdates)
+        UserDefaults.standard.set(on, forKey: automaticUpdates)
+        sender.state = on ? .on : .off
+        scheduleUpdateChecks()
+    }
+
+    /// Quitting throws away a compression in progress, including a long download, so ask first.
     private func confirmQuit() -> Bool {
         if quitConfirmed || server?.hasActiveJobs != true { return true }
         let alert = NSAlert()
-        alert.messageText = "A video is still being compressed"
+        alert.messageText = "Something is still being compressed"
         alert.informativeText = "Quitting now stops it and discards the progress so far, including any download from iCloud."
         alert.addButton(withTitle: "Keep Running")
         alert.addButton(withTitle: "Quit Anyway")
@@ -1555,6 +2662,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    // Clicking the Dock icon brings the window back if it isn't showing.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { window.makeKeyAndOrderFront(nil) }
+        return true
+    }
 }
 
 let app = NSApplication.shared

@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Photo Review: free up iCloud Photos storage on your Mac</title>
-<meta name="description" content="A free Mac app that shows which photos and videos are using your iCloud storage, then lets you compress the big videos or delete what you don't need.">
+<meta name="description" content="A free Mac app that shows which photos and videos are using your iCloud storage, then lets you compress big videos and RAW photos or delete what you don't need.">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Photo Review: free up iCloud Photos storage on your Mac">
-<meta property="og:description" content="See which photos and videos are using your iCloud storage, then compress the big videos or delete what you don't need. Free and open source.">
+<meta property="og:description" content="See which photos and videos are using your iCloud storage, then compress big videos and RAW photos or delete what you don't need. Free and open source.">
 <meta property="og:image" content="https://danielyaa5.github.io/photo-review/screenshot-library.png">
 <meta property="og:url" content="https://danielyaa5.github.io/photo-review/">
 <meta name="twitter:card" content="summary_large_image">
@@ -75,7 +75,7 @@
 <header class="hero wrap">
   <img class="icon" src="icon.svg" alt="">
   <h1>See what's filling your iCloud&nbsp;Photos, and get the space back</h1>
-  <p class="lede">Photo Review is a free Mac app. It lists your photos and videos from largest to smallest, then lets you compress the big videos or delete what you don't need.</p>
+  <p class="lede">Photo Review is a free Mac app. It lists your photos and videos from largest to smallest, then lets you compress big videos and RAW photos, or delete what you don't need.</p>
   <a class="download" href="https://github.com/danielyaa5/photo-review/releases/latest/download/PhotoReview.zip">Download for Mac</a>
   <p class="fine">Free · under 1 MB · macOS 13 or later · signed and checked by Apple</p>
 </header>
@@ -102,7 +102,7 @@
       <div class="card">
         <div class="step">3</div>
         <h3>Allow access to Photos</h3>
-        <p>Choose <b>Allow Full Access</b> when asked. Your web browser then opens with your biggest photos and videos at the top. The first look takes a minute or two.</p>
+        <p>Choose <b>Allow Full Access</b> when asked. The app's window then shows your biggest photos and videos at the top. The first look takes a minute or two.</p>
       </div>
     </div>
     <p class="fine">Before a large batch, <a href="#storage">check how to manage your Mac's Photos library size</a>. Compressing downloads full-quality originals, so leave room for them.</p>
@@ -140,12 +140,12 @@
         <p>The Photos app can't sort by size. Photo Review can: every photo and video, largest first, with a preview so you know what you're looking at.</p>
       </div>
       <div class="card">
-        <h3>Compress videos</h3>
-        <p>Make a much smaller copy of a video and keep that instead. You choose how small. HDR videos stay HDR, and the date, place and albums come along. If you like, the app removes the original for you once the copy is in.</p>
+        <h3>Compress videos and photos</h3>
+        <p>Make a much smaller copy and keep that instead. You choose how small. HDR videos stay HDR, RAW and JPEG photos become high-quality HEIC photos, Live Photos can keep just the still, and the date, place, albums, title, caption and keywords come along. If you like, the app removes the original for you once the copy is in.</p>
       </div>
       <div class="card">
         <h3>Delete what you don't need</h3>
-        <p>Select and delete. Your Mac asks you to confirm, and deleted items wait in Recently Deleted for 30 days in case you change your mind.</p>
+        <p>Select and delete, one at a time or everything over a size you choose. Your Mac asks you to confirm, and deleted items wait in Recently Deleted for 30 days in case you change your mind. To keep the originals somewhere else first, the app can copy them to a drive before deleting them.</p>
       </div>
       <div class="card">
         <h3>See what you saved</h3>
@@ -162,7 +162,7 @@
     <h2>Your photos stay yours</h2>
     <div class="card">
       <ul class="plain">
-        <li><b>It runs only on your Mac.</b> Photo Review doesn't upload anything, and there is no account to create.</li>
+        <li><b>It runs only on your Mac.</b> Photo Review doesn't upload anything about your photos, and there is no account to create. When it opens, and once a day while it's open, it asks GitHub whether a newer version is out, which you can turn off.</li>
         <li><b>Nothing is deleted without your say-so.</b> Your Mac shows its own confirmation every time.</li>
         <li><b>Compressing never changes the original.</b> You get a smaller copy next to it, and the original stays until you decide to delete it, or ask the app to delete it once the copy is ready.</li>
         <li><b>Anyone can check how it works.</b> The code is public and free to read.</li>
@@ -177,7 +177,7 @@
         <li><b>It's a new app.</b> So far it has been tested on two of its author's Macs. Watch a compressed copy before you delete its original, and keep a backup of anything you couldn't bear to lose.</li>
         <li><b>Very large videos take a while.</b> A video stored in iCloud has to be downloaded before it can be compressed, and a 25 GB one can take an hour or more.</li>
         <li><b>Your Mac's library can grow while compressing.</b> Downloaded originals can remain on disk, including in Recently Deleted. <a href="#storage">Follow the storage guide</a> to check your smaller copies and permanently remove only their replaced originals.</li>
-        <li><b>A few details don't carry over to a compressed copy:</b> captions, keywords and the names of people in it.</li>
+        <li><b>The names of people in it don't carry over to a compressed copy.</b> Titles, captions and keywords do. A RAW photo's copy is developed afresh, so its colours can differ a little: compare it before deleting the original.</li>
       </ul>
     </div>
   </section>
@@ -189,8 +189,8 @@
       <p>Yes. There are no ads, no accounts and nothing to buy.</p>
     </details>
     <details>
-      <summary>Why does it open in my web browser?</summary>
-      <p>The app shows its screen as a page in your browser. That page lives on your own Mac, at an address starting with 127.0.0.1, and isn't on the internet. Keep the small Photo Review window open while you use it.</p>
+      <summary>Does it need the internet?</summary>
+      <p>Only to download originals that are stored in iCloud. Everything else happens on your Mac, in the app's own window, and nothing about your photos is sent anywhere.</p>
     </details>
     <details>
       <summary>Will this free up space on my iPhone too?</summary>
@@ -202,7 +202,7 @@
     </details>
     <details>
       <summary>How do I quit or remove it?</summary>
-      <p>Close the small Photo Review window to quit. To remove it, drag Photo Review from Applications to the Trash. Your photos are not affected.</p>
+      <p>Close the Photo Review window to quit. To remove it, drag Photo Review from Applications to the Trash. Your photos are not affected.</p>
     </details>
     <details>
       <summary>Something went wrong, or I have an idea.</summary>

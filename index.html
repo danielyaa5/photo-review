@@ -9,11 +9,14 @@
   :root {
     --bg: #f5f5f2; --card: #ffffff; --fg: #1b1b1d; --muted: #6a6a70; --line: #e1e1dc;
     --accent: #0a62d0; --danger: #c22f28; --shade: rgba(0, 0, 0, .55); --good: #1a7f37;
+    /* Behind white text. The same as the accents in light mode; darker in dark mode, where the accents are light. */
+    --accent-fill: #0a62d0; --danger-fill: #c22f28;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #151517; --card: #212124; --fg: #f1f1f2; --muted: #9b9ba2; --line: #34343a;
       --accent: #63a6ff; --danger: #ff6a60; --shade: rgba(0, 0, 0, .7); --good: #1a7f37;
+      --accent-fill: #2563eb; --danger-fill: #d13b32;
     }
   }
   * { box-sizing: border-box; }
@@ -23,8 +26,8 @@
   button, select { font: inherit; color: inherit; }
   button { cursor: pointer; border: 1px solid var(--line); background: var(--card); border-radius: 7px; padding: 6px 12px; }
   button:disabled { opacity: .5; cursor: default; }
-  button.danger { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.danger { background: var(--danger-fill); border-color: var(--danger-fill); color: #fff; font-weight: 600; }
+  button.primary { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; font-weight: 600; }
   select { border: 1px solid var(--line); background: var(--card); border-radius: 7px; padding: 6px 8px; }
 
   header { padding: 20px 20px 12px; max-width: 1500px; margin: 0 auto; }
@@ -54,7 +57,7 @@
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
   .seg button { border: 0; border-radius: 0; background: var(--card); }
   .seg button + button { border-left: 1px solid var(--line); }
-  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  .seg button[aria-pressed="true"] { background: var(--accent-fill); color: #fff; }
   #match { color: var(--muted); margin-left: auto; }
 
   main { padding: 4px 20px 110px; max-width: 1500px; margin: 0 auto; }
@@ -76,9 +79,9 @@
   .actions .pickboth { flex-basis: 100%; }
   .pickboth, button.mainline { font-weight: 600; color: var(--accent); border-color: var(--accent); }
   .pickdelete, button.redline { color: var(--danger); border-color: var(--danger); }
-  .card.shrinking .pickshrink { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .card.both .pickboth { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .card.deleting .pickdelete { background: var(--danger); border-color: var(--danger); color: #fff; }
+  .card.shrinking .pickshrink { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; }
+  .card.both .pickboth { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; }
+  .card.deleting .pickdelete { background: var(--danger-fill); border-color: var(--danger-fill); color: #fff; }
   .card .reveal { display: block; width: 100%; margin-top: 6px; border: 0; background: none; padding: 2px 0; color: var(--accent); font-size: 12px; text-align: left; }
   /* What is happening to this video in the shrink queue, shown on its picture. */
   .work { position: absolute; left: 0; right: 0; bottom: 0; background: var(--shade); color: #fff; font-size: 12px; padding: 6px 8px 7px; }
@@ -102,36 +105,51 @@
 
   #jobs { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
   #jobs .head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
-  #jobs .head b { flex: 1; }
+  #jobs .head b { flex: none; }
+  #jobs .head .counts { flex: 1; color: var(--muted); font-size: 13px; }
   /* When the originals will be deleted: easy to miss in the rows, so it gets a line of its own. */
   #jnote { margin: 0 0 8px; padding: 7px 10px; border-left: 3px solid var(--accent); background: var(--bg); border-radius: 6px; font-size: 13px; }
-  .job { display: grid; grid-template-columns: minmax(120px, 1.2fr) minmax(160px, 2fr) auto; gap: 4px 12px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); }
+  .job { display: grid; grid-template-columns: 220px minmax(0, 1fr) auto; gap: 4px 14px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
   .job .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .job .status { color: var(--muted); font-size: 13px; }
   .job .status.bad { color: var(--danger); }
+  .job .note { color: var(--muted); font-size: 12px; margin-top: 2px; }
   .job .track { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; margin-top: 4px; }
   .job .track div { height: 100%; background: var(--accent); }
   .job button { padding: 4px 10px; font-size: 13px; }
   .job .buttons { display: flex; gap: 6px; }
 
-  #shrink { position: fixed; inset: 0; background: var(--shade); display: none; align-items: center; justify-content: center; z-index: 20; padding: 16px; }
-  #shrink.on { display: flex; }
-  #shrink .dialog { background: var(--card); border-radius: 12px; padding: 20px 22px; width: 100%; max-width: 520px; max-height: 100%; overflow: auto; }
-  #shrink h2 { margin: 0 0 6px; font-size: 18px; }
-  #shrink p { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
-  #shrink a { color: var(--accent); }
-  #shrink label { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0; }
-  #shrink select { width: 230px; }
-  #shrink label.check { justify-content: flex-start; gap: 8px; margin: 12px 0 4px; color: var(--fg); }
+  .overlay { position: fixed; inset: 0; background: var(--shade); display: none; align-items: center; justify-content: center; z-index: 20; padding: 16px; }
+  .overlay.on { display: flex; }
+  .overlay .dialog { background: var(--card); border-radius: 12px; padding: 20px 22px; width: 100%; max-width: 520px; max-height: 100%; overflow: auto; }
+  .overlay h2 { margin: 0 0 6px; font-size: 18px; }
+  .overlay p { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+  .overlay a { color: var(--accent); }
+  .overlay label { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0; }
+  .overlay select { width: 230px; }
+  .overlay label.check { justify-content: flex-start; gap: 8px; margin: 12px 0 4px; color: var(--fg); }
   #spreview { max-height: 170px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; margin-top: 12px; font-size: 13px; }
   #spreview .line { display: flex; justify-content: space-between; gap: 12px; padding: 6px 10px; white-space: nowrap; }
   #spreview .line + .line { border-top: 1px solid var(--line); }
   #spreview .name { overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
   #spreview .skip { color: var(--muted); }
+  #shrink .dialog { max-width: 600px; padding-bottom: 0; }
   #shrink #sestimate { color: var(--fg); font-size: 14px; margin-top: 14px; }
-  #shrink #sboth { color: var(--fg); margin: 12px 0 4px; }
-  #shrink #salso { color: var(--fg); }
-  #shrink .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+  #soriginals { background: var(--bg); border-radius: 9px; padding: 10px 12px; margin: 4px 0 12px; }
+  #soriginals p { color: var(--fg); margin: 0 0 6px; }
+  #soriginals .check { margin: 4px 0 6px; }
+  #soriginals #sconfirm { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
+  #slosses { margin: 0 0 10px; padding-left: 18px; color: var(--fg); font-size: 13px; }
+  #slosses li + li { margin-top: 3px; }
+  #shrink details { border-top: 1px solid var(--line); padding: 9px 0 0; margin: 0 0 9px; }
+  #shrink summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--fg); }
+  #shrink details p { margin: 8px 0 0; }
+  /* Cancel and Start stay at the bottom of the dialog however far its text is scrolled. */
+  #shrink .row { position: sticky; bottom: 0; background: var(--card); margin: 10px -22px 0; padding: 12px 22px 18px; border-top: 1px solid var(--line); }
+  .overlay .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+  #bulk #bcount { color: var(--fg); font-size: 14px; margin-top: 12px; }
+  #updatebar { max-width: none; margin: 10px 0 0; padding: 10px 14px; }
+  #updatebar a { color: var(--accent); }
 
   #viewer { position: fixed; inset: 0; background: rgba(0, 0, 0, .92); display: none; flex-direction: column; z-index: 10; }
   #viewer.on { display: flex; }
@@ -158,8 +176,8 @@
     #bar .hint { order: 5; flex-basis: 100%; }
     #bar #act { flex: 3; white-space: nowrap; }
     #bar #clear { flex: 1; }
-    #shrink label { flex-direction: column; align-items: stretch; gap: 4px; }
-    #shrink select { width: 100%; }
+    .overlay label { flex-direction: column; align-items: stretch; gap: 4px; }
+    .overlay select { width: 100%; }
     #spreview .line { flex-direction: column; gap: 0; white-space: normal; }
     #viewbar { padding: 10px 14px; gap: 8px; }
     #viewbar .title { flex: 1 1 100%; overflow-wrap: anywhere; }
@@ -172,7 +190,8 @@
 <header>
   <div class="top"><h1><img src="/icon.svg" alt="">Photo Review</h1><span class="links"><button id="guideshow" class="link" hidden>What the buttons do</button><a href="/stats">Savings and history</a></span></div>
   <div id="summary">Loading…</div>
-  <div id="fresh" hidden><span id="freshtext"></span> <button id="update" class="link">Update now</button></div>
+  <div id="fresh" hidden><span id="freshtext"></span> <button id="update" class="link">Measure again</button></div>
+  <div id="updatebar" class="notice" hidden><span id="updatetext"></span> <a id="updatelink" href="https://github.com/danielyaa5/photo-review/releases/latest" target="_blank" rel="noopener noreferrer">Download it</a> · <button id="updatelater" class="link">Not now</button></div>
   <section id="guide" aria-label="What the buttons do">
     <div class="steps">
       <div class="step">
@@ -185,7 +204,7 @@
       </div>
       <div class="step">
         <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"/></svg></span>
-        <div><b>Compress</b><p>Makes a much smaller copy of a video. The original stays until you delete it.</p></div>
+        <div><b>Compress</b><p>Makes a much smaller copy: videos are re-encoded, RAW and JPEG photos become HEIC, and Live Photos keep just the still. The original stays until you delete it.</p></div>
       </div>
     </div>
     <p class="foot"><span>Pick what you want on each item, then press the button that appears at the bottom. macOS asks you to confirm before anything is deleted, and deleted items stay in Recently Deleted for 30 days.</span><button id="guidehide" class="link">Hide</button></p>
@@ -196,16 +215,18 @@
       <button data-kind="all" aria-pressed="true">All</button>
       <button data-kind="video" aria-pressed="false">Videos</button>
       <button data-kind="photo" aria-pressed="false">Photos</button>
+      <button data-kind="raw" aria-pressed="false" hidden>RAW</button>
     </div>
     <select id="year" aria-label="Year"><option value="">All years</option></select>
     <span id="match"></span>
+    <button id="bulkopen">Pick many…</button>
   </div>
 </header>
 
 <main>
   <div id="notice" class="notice" hidden></div>
   <section id="jobs" hidden>
-    <div class="head"><b>Compressing videos</b><button id="jclear">Clear finished</button></div>
+    <div class="head"><b>Queue</b><span class="counts" id="jcounts"></span><button id="jpick" hidden></button><button id="jclear">Clear finished</button></div>
     <p id="jnote" hidden></p>
     <div id="joblist"></div>
   </section>
@@ -217,32 +238,66 @@
   <span class="count" id="shrinkcount"></span>
   <span class="count" id="deletecount"></span>
   <button id="act" class="primary"></button>
+  <button id="archive" hidden title="Copies the originals of the items picked with Delete into a folder you choose, then deletes them">Copy to a folder, then delete…</button>
   <span class="hint">Deleted items move to Recently Deleted in Photos for 30 days. iCloud space is freed when they leave it.</span>
   <button id="clear">Clear</button>
 </div>
 
-<div id="shrink">
+<div id="shrink" class="overlay">
   <div class="dialog" role="dialog" aria-labelledby="stitle">
     <h2 id="stitle">Compress videos</h2>
-    <p>Each video is downloaded from iCloud at full quality, re-encoded on this Mac, and added to Photos as a new item with the same date, location, favorite and albums. The original stays until you delete it, unless you picked Compress &amp; delete for it or tick the box below.</p>
-    <p><b>Leave room on your Mac:</b> downloaded originals can grow the Photos library. Use Optimize Mac Storage in Photos' iCloud settings and smaller batches if space is tight. After checking the smaller copies and their iCloud upload, you can permanently remove only their replaced originals from Recently Deleted. This deletes those originals across your iCloud Photos devices and ends recovery. <a href="https://danielyaa5.github.io/photo-review/#storage" target="_blank" rel="noopener noreferrer">Photos storage guide</a></p>
+    <p>Each one is downloaded from iCloud at full quality if it isn't on this Mac, made smaller here, and added to Photos as a new item with the same date, location, favorite and albums. Big videos can take hours.</p>
+    <!-- What happens to the originals comes first: it's what matters most. -->
+    <div id="soriginals">
+      <p id="sboth" hidden></p>
+      <label class="check" id="sdeleterow"><input type="checkbox" id="sdelete"> <span id="sdeletetext"></span></label>
+      <p id="salso" hidden></p>
+      <p id="sconfirm"></p>
+    </div>
     <label>Resolution <select id="sres">
       <option value="keep">Keep original</option><option value="2160">4K at most</option>
       <option value="1080">1080p at most</option><option value="720">720p at most</option></select></label>
-    <label>Frame rate <select id="sfps">
+    <label id="sfpsrow">Frame rate <select id="sfps">
       <option value="keep">Keep original</option><option value="30">30 fps at most</option><option value="24">24 fps at most</option></select></label>
-    <label>Format <select id="scodec">
+    <label id="scodecrow">Format <select id="scodec">
       <option value="hevc">HEVC (smallest)</option><option value="h264">H.264 (plays everywhere)</option></select></label>
     <label>Quality <select id="squality">
       <option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
     <div id="spreview"></div>
     <p id="sestimate"></p>
-    <p id="sboth" hidden></p>
-    <label class="check" id="sdeleterow"><input type="checkbox" id="sdelete"> <span id="sdeletetext"></span></label>
-    <p>macOS asks you to confirm once, when the whole queue has finished, not after each video. Deleted originals stay in Recently Deleted for 30 days.</p>
-    <p>HDR videos stay HDR, and HDR, ProRes and other 10-bit videos are always saved as HEVC so they keep their full colour depth. Edits are baked in, and captions, keywords and people tags don't carry over.</p>
-    <p id="salso" hidden></p>
+    <!-- What a copy gives up, a line each, for the kinds of item picked. The rest is folded away below. -->
+    <ul id="slosses" hidden>
+      <li id="slive" hidden>Live Photos keep just the still photo; their motion isn't kept.</li>
+      <li id="sraw" hidden>RAW photos become HEIC copies developed afresh, so they can look a little different from what Photos shows: compare before deleting.</li>
+    </ul>
+    <details id="smore">
+      <summary>What changes in the copies</summary>
+      <p id="slivemore" hidden>A Live Photo whose still is HEIC keeps that still exactly as it is; a JPEG still becomes HEIC like any JPEG photo.</p>
+      <p id="sjpeg" hidden>JPEG photos become HEIC copies at the chosen resolution and quality, usually a half to three quarters of the size, keeping the HDR of iPhone photos. Re-compressing a JPEG loses a little quality, so keep High if in doubt.</p>
+      <p id="srawmore" hidden>RAW copies are 10-bit HEIC at the chosen resolution and quality, developed with macOS's standard RAW settings. They aren't HDR, and editing them later is like editing any photo, not a RAW file. Their camera details, date and location carry over. A RAW photo with edits in Photos is skipped, because a copy made from the RAW file would lose them, and so is a RAW+JPEG pair.</p>
+      <p id="shdr">HDR videos stay HDR, and HDR, ProRes and other 10-bit videos are always saved as HEVC so they keep their full colour depth.</p>
+      <p>Edits made in Photos are baked into the copies.</p>
+      <p id="sdetails">Titles, captions and keywords are copied to each new item; people tags can't be. For that, macOS asks once whether Photo Review may control Photos. Without it, originals picked for deletion are kept.</p>
+    </details>
+    <details id="sroom">
+      <summary>Leave room on your Mac</summary>
+      <p>Downloaded originals can grow the Photos library. Use Optimize Mac Storage in Photos' iCloud settings and smaller batches if space is tight. After checking the smaller copies and their iCloud upload, you can permanently remove only their replaced originals from Recently Deleted. This deletes those originals across your iCloud Photos devices and ends recovery. <a href="https://danielyaa5.github.io/photo-review/#storage" target="_blank" rel="noopener noreferrer">Photos storage guide</a></p>
+    </details>
     <div class="row"><button id="scancel">Cancel</button><button id="sstart" class="primary">Start</button></div>
+  </div>
+</div>
+<div id="bulk" class="overlay">
+  <div class="dialog" role="dialog" aria-labelledby="btitle">
+    <h2 id="btitle">Pick many at once</h2>
+    <p>Picks items in the current view (<span id="bscope"></span>) that are at least the size you choose, largest first. To narrow it down, close this and change the type or year above the list.</p>
+    <label>At least <select id="bmin">
+      <option value="0">Any size</option><option value="100000000">100 MB</option><option value="500000000">500 MB</option>
+      <option value="1000000000" selected>1 GB</option><option value="2000000000">2 GB</option><option value="5000000000">5 GB</option>
+      <option value="10000000000">10 GB</option></select></label>
+    <label>Pick them for <select id="baction">
+      <option value="toShrink">Compress</option><option value="toBoth">Compress &amp; delete</option><option value="toDelete">Delete</option></select></label>
+    <p id="bcount"></p>
+    <div class="row"><button id="bcancel">Cancel</button><button id="bpick" class="primary">Pick</button></div>
   </div>
 </div>
 <div id="toast" role="status"></div>
@@ -272,6 +327,15 @@ const PAGE = 60;
 // `viewing` is the item open in the viewer, `current` its index in the list or -1.
 const state = { items: [], toShrink: new Map(), toBoth: new Map(), toDelete: new Map(), work: new Map(), kind: "all", year: "", match: 0, status: "starting", current: -1, viewing: null, busy: false, jobs: new Map(), gone: new Set(), downloading: false, queueLeft: 0, offline: false, measuredAt: null, updating: "" };
 const $ = (id) => document.getElementById(id);
+// What a smaller copy can be made of: videos, RAW and JPEG photos, and Live Photos (their still alone).
+// Other photos are already compact and can only be deleted.
+const compressible = (item) => Boolean(item.video || item.raw || item.jpeg || item.live);
+// "3 videos", "1 photo", or "4 items" for a mix.
+function countOf(items) {
+  const videos = items.filter((item) => item.video).length;
+  const word = videos === items.length ? "video" : videos === 0 ? "photo" : "item";
+  return `${items.length.toLocaleString()} ${word}${items.length === 1 ? "" : "s"}`;
+}
 
 function size(bytes) {
   if (bytes >= 1e9) return (bytes / 1e9).toFixed(2) + " GB";
@@ -353,9 +417,10 @@ function renderHeader(data) {
   $("progress").firstElementChild.style.width = data.total ? (100 * data.scanned / data.total) + "%" : "0";
   // The measurement is kept for a day, so say how old it is and offer a fresh one.
   state.measuredAt = data.measuredAt;
-  state.updating = updating ? `Updating… ${data.scanned.toLocaleString()} of ${data.total.toLocaleString()} items checked.` : "";
+  state.updating = updating ? `Measuring again… ${data.scanned.toLocaleString()} of ${data.total.toLocaleString()} items checked.` : "";
   renderFreshness();
   $("match").textContent = data.matchCount ? `${data.matchCount.toLocaleString()} items · ${size(data.matchBytes)}` : "";
+  document.querySelector('#kinds [data-kind="raw"]').hidden = !data.rawCount && state.kind !== "raw";
 
   const select = $("year");
   const wanted = ["", ...data.years.map((y) => String(y.year))];
@@ -428,8 +493,8 @@ function renderGrid() {
           el("div", { className: "size", textContent: size(item.bytes) }),
           el("div", { className: "meta", textContent: details, title: details }),
           el("div", { className: "meta", textContent: item.name, title: item.name }),
-          // Only videos can be shrunk; photos just get Delete.
-          el("div", { className: "actions" }, item.video ? [both, remove, shrink] : [remove]),
+          // Videos and RAW photos can be compressed; other photos just get Delete.
+          el("div", { className: "actions" }, compressible(item) ? [both, remove, shrink] : [remove]),
           reveal,
         ]),
       ]);
@@ -449,6 +514,18 @@ function tileWork(job, item) {
   const earlier = item?.copy ? shrunk(item.copy.bytes) : null;
   if (!job) return earlier;
   const percent = Math.round(job.progress * 100);
+  if (job.kind === "archive") {
+    switch (job.state) {
+      case "queued": return { text: "Waiting to be copied", busy: true };
+      case "downloading": return { text: percent >= 1 ? `Copying to the folder · ${percent}%` : "Copying to the folder…", progress: job.progress, busy: true };
+      case "done":
+        if (job.originalDeleted) return null;
+        if (job.deletion === "pending") return { text: state.queueLeft ? "Copied · deleted when the queue finishes" : "Copied · confirm the deletion", busy: true };
+        return { text: "Copied to the folder" };
+      case "failed": return { text: "Couldn't be copied" };
+      default: return earlier;
+    }
+  }
   switch (job.state) {
     case "queued": return { text: "Waiting to be compressed", busy: true };
     case "downloading": return { text: percent >= 1 ? `Downloading · ${percent}%` : "Downloading from iCloud…", progress: job.progress, busy: true };
@@ -529,12 +606,16 @@ function renderBar() {
   const act = $("act");
   act.textContent = state.busy ? "Confirm in the Photo Review dialog…"
     : shrinks && deletes ? `Compress ${shrinks} and delete ${deletes}…`
-    : shrinks ? `Compress ${shrinks} video${shrinks === 1 ? "" : "s"}…`
+    : shrinks ? `Compress ${countOf([...state.toShrink.values(), ...state.toBoth.values()])}…`
     : `Delete ${deletes} item${deletes === 1 ? "" : "s"}…`;
   act.className = shrinks ? "primary" : "danger";
   act.disabled = state.busy;
-  // The reminder about Recently Deleted only matters when something is marked for deletion.
-  document.querySelector("#bar .hint").hidden = deletes === 0;
+  // Anything picked with Delete can instead be copied to a folder first, and deleted once that's done.
+  $("archive").hidden = deletes === 0;
+  $("archive").disabled = state.busy;
+  $("archive").textContent = `Copy ${deletes.toLocaleString()} to a folder, then delete…`;
+  // The reminder about Recently Deleted matters whenever an original is going to be deleted, now or at the end.
+  document.querySelector("#bar .hint").hidden = deletes === 0 && both === 0;
 }
 
 // Adds an item to one selection or takes it out. An item is in one selection at most, and a video
@@ -543,7 +624,7 @@ const PICKS = ["toShrink", "toBoth", "toDelete"];
 function toggle(which, item) {
   if (isBusy(item.id) || (which !== "toDelete" && shrunkAlready(item))) return;
   if (state[which].has(item.id)) state[which].delete(item.id);
-  else if (which === "toDelete" || item.video) {
+  else if (which === "toDelete" || compressible(item)) {
     for (const pick of PICKS) state[pick].delete(item.id);
     state[which].set(item.id, item);
   }
@@ -584,11 +665,11 @@ function renderViewerBar() {
   $("vmeta").textContent = ` · ${item.date || "No date"} · ${item.name}${item.video ? " · " + duration(item.dur) : ""}${place}${item.copy ? ` · already compressed to ${size(item.copy.bytes)}, original not deleted` : ""}${item.shrunkFrom != null ? ` · a compressed copy${item.shrunkFrom ? ", was " + size(item.shrunkFrom) : ""}` : ""}`;
   const busy = isBusy(item.id);
   const shrunk = shrunkAlready(item);
-  $("vshrink").hidden = !item.video || shrunk;
+  $("vshrink").hidden = !compressible(item) || shrunk;
   $("vshrink").textContent = state.toShrink.has(item.id) ? "✓ Compress" : "Compress";
   $("vshrink").className = state.toShrink.has(item.id) ? "primary" : "";
   $("vshrink").disabled = busy;
-  $("vboth").hidden = !item.video || shrunk;
+  $("vboth").hidden = !compressible(item) || shrunk;
   $("vboth").textContent = state.toBoth.has(item.id) ? "✓ Compress & delete" : "Compress & delete";
   $("vboth").className = state.toBoth.has(item.id) ? "primary" : "mainline";
   $("vboth").disabled = busy;
@@ -640,6 +721,29 @@ async function deletePicked() {
   }
   renderBar();
 }
+// Copies the originals of everything picked with Delete into a folder the person chooses, then deletes them
+// with one macOS confirmation once the queue has finished, like Compress & delete.
+async function archivePicked() {
+  const picked = [...state.toDelete.values()];
+  if (!picked.length) return;
+  // The other buttons wait while the folder is chosen, so nothing picked here can be deleted before it's copied.
+  state.busy = true;
+  renderBar();
+  try {
+    const chosen = await post("/api/choose-folder", {});
+    if (!chosen.ok) { if (chosen.error) toast(chosen.error); return; }
+    const result = await post("/api/archive", { ids: picked.map((item) => item.id), folder: chosen.path });
+    if (!result.ok) return toast(result.error);
+    for (const item of picked) state.toDelete.delete(item.id);
+    toast(`Copying ${countOf(picked)} to ${chosen.path}. They're deleted once you confirm, after the queue has finished.`);
+  } finally {
+    state.busy = false;
+    renderBar();
+  }
+  await pollJobs();
+  renderGrid();
+}
+$("archive").onclick = archivePicked;
 // With videos to shrink, the button opens the shrink settings and anything picked with Delete goes
 // ahead from there. With only deletions picked, it deletes straight away.
 $("act").onclick = () => (state.toShrink.size + state.toBoth.size ? openShrink() : deletePicked());
@@ -653,6 +757,7 @@ $("vreveal").onclick = () => openInPhotos(state.viewing);
 $("stage").onclick = (event) => { if (event.target === $("stage")) closeViewer(); };
 document.addEventListener("keydown", (event) => {
   if ($("shrink").classList.contains("on")) { if (event.key === "Escape") $("shrink").classList.remove("on"); return; }
+  if ($("bulk").classList.contains("on")) { if (event.key === "Escape") $("bulk").classList.remove("on"); return; }
   if (!state.viewing || event.metaKey || event.ctrlKey || event.altKey) return;
   if (event.key === "Escape") closeViewer();
   else if (event.key === "ArrowLeft") step(-1);
@@ -664,7 +769,8 @@ document.addEventListener("keydown", (event) => {
 });
 
 // Shrinking
-const selectedVideos = () => [...state.toShrink.values(), ...state.toBoth.values()];
+// Everything picked for Compress or Compress & delete: videos and RAW photos.
+const selectedItems = () => [...state.toShrink.values(), ...state.toBoth.values()];
 const shrinkOptions = () => ({ resolution: $("sres").value, fps: $("sfps").value, codec: $("scodec").value, quality: $("squality").value });
 
 // Mirrors ShrinkSettings.bitrate in main.swift, plus a small allowance for audio. The original frame rate
@@ -677,8 +783,32 @@ function estimate(item, options, fps) {
   const rate = base * Math.pow((w * h) / (3840 * 2160), 0.75) * Math.pow(fps / 30, 0.6) * (options.codec === "h264" ? 1.7 : 1);
   return (rate + 2e5) * item.dur / 8;
 }
-// Low and high guesses for one video, or null when it would be skipped as already small enough.
+// RAW photos as 10-bit HEIC, as shares of the RAW file: what test RAWs from four cameras came to.
+// ShrinkSettings.photoQuality in main.swift sets the HEIC quality for each choice.
+const RAW_SHARE = { high: [0.13, 0.45], medium: [0.06, 0.25], low: [0.04, 0.19] };
+// JPEG photos as HEIC, as shares of the JPEG: what JPEGs from a real library came to, from panoramas to
+// iPhone photos whose HDR gain map is kept (ShrinkSettings.jpegQuality sets the quality).
+const JPEG_SHARE = { high: [0.45, 0.8], medium: [0.38, 0.68], low: [0.22, 0.42] };
+// Low and high guesses for one item, or null when it would be skipped: a video that is already small
+// enough, or a RAW photo with edits in Photos.
 function preview(item, options) {
+  if (item.raw) {
+    if ((item.tags || []).includes("edited")) return null;
+    const short = Math.min(item.w, item.h), cap = Number(options.resolution);
+    const scale = cap && short > cap ? (cap / short) ** 2 : 1;
+    const [low, high] = RAW_SHARE[options.quality];
+    return { low: item.bytes * low * scale, high: Math.min(item.bytes * high * scale, item.bytes) };
+  }
+  if (item.live || item.jpeg) {
+    // The copy is one still: the item less its motion, and less the original when an edited version is used.
+    const motion = item.live ? (item.motion || item.bytes * 0.45) : 0;
+    const still = Math.max(item.bytes - motion, 0) / ((item.tags || []).includes("edited") ? 2 : 1);
+    if (!item.jpeg) return still > item.bytes * 0.9 ? null : { low: still, high: still };
+    const short = Math.min(item.w, item.h), cap = Number(options.resolution);
+    const scale = cap && short > cap ? (cap / short) ** 2 : 1;
+    const [low, high] = JPEG_SHARE[options.quality];
+    return { low: still * low * scale, high: Math.min(still * high * scale, item.bytes) };
+  }
   const cap = Number(options.fps);
   const low = estimate(item, options, cap || 30), high = estimate(item, options, cap || 60);
   return low > item.bytes * 0.8 ? null : { low, high: Math.min(high, item.bytes) };
@@ -687,65 +817,93 @@ function range(low, high) {
   return size(low) === size(high) ? size(low) : `${size(low)} to ${size(high)}`;
 }
 function renderEstimate() {
-  const videos = selectedVideos(), options = shrinkOptions();
-  // Videos picked with Compress & delete lose their original either way; the tick box decides for the rest.
+  const picked = selectedItems(), options = shrinkOptions();
+  // Frame rate, format and the HDR note are about videos; the other notes are for the kinds of item picked.
+  const hasVideos = picked.some((item) => item.video), hasRaw = picked.some((item) => item.raw), hasLive = picked.some((item) => item.live);
+  $("sfpsrow").hidden = $("scodecrow").hidden = $("shdr").hidden = !hasVideos;
+  $("sraw").hidden = $("srawmore").hidden = !hasRaw;
+  $("slive").hidden = $("slivemore").hidden = !hasLive;
+  $("slosses").hidden = !hasRaw && !hasLive;
+  $("sjpeg").hidden = !picked.some((item) => item.jpeg);
+  // Items picked with Compress & delete lose their original either way; the tick box decides for the rest.
   const both = state.toBoth.size, plain = state.toShrink.size;
+  const the = (items) => items.length === 1 ? countOf(items).slice(2) : countOf(items);
   $("sboth").hidden = both === 0;
-  $("sboth").textContent = `The ${both === 1 ? "video" : `${both} videos`} picked with Compress & delete will have ${both === 1 ? "its original" : "their originals"} deleted at the end, after the whole queue has finished.`;
+  $("sboth").textContent = `The original${both === 1 ? "" : "s"} of the ${the([...state.toBoth.values()])} picked with Compress & delete ${both === 1 ? "is" : "are"} deleted once the whole queue has finished.`;
   $("sdeleterow").hidden = plain === 0;
   $("sdeletetext").textContent = both === 0 ? "Delete each original once its smaller copy is in Photos"
-    : `Delete the original${plain === 1 ? "" : "s"} of the other ${plain === 1 ? "video" : plain + " videos"} as well`;
+    : `Delete the original${plain === 1 ? "" : "s"} of the other ${the([...state.toShrink.values()])} as well`;
   const doomed = (item) => state.toBoth.has(item.id) || $("sdelete").checked;
-  let before = 0, low = 0, high = 0, skipped = 0;
-  $("spreview").replaceChildren(...videos.map((item) => {
+  // Only originals that are deleted free anything; a kept one stays, and its copy uses space alongside it.
+  let originals = 0, copiesLow = 0, copiesHigh = 0, skipped = 0, deleting = 0, keeping = 0;
+  let freedLow = 0, freedHigh = 0, laterLow = 0, laterHigh = 0;
+  $("spreview").replaceChildren(...picked.map((item) => {
     const guess = preview(item, options);
-    before += item.bytes;
-    low += guess ? guess.low : item.bytes;
-    high += guess ? guess.high : item.bytes;
     if (!guess) skipped++;
+    else {
+      originals += item.bytes;
+      copiesLow += guess.low;
+      copiesHigh += guess.high;
+      if (doomed(item)) { deleting++; freedLow += item.bytes - guess.high; freedHigh += item.bytes - guess.low; }
+      else { keeping++; laterLow += item.bytes - guess.high; laterHigh += item.bytes - guess.low; }
+    }
     // The app decides for real once it has the file; a 60 fps original near the limit can still be skipped then.
-    const unsure = guess && options.fps === "keep" && estimate(item, options, 60) > item.bytes * 0.8;
+    const unsure = guess && item.video && options.fps === "keep" && estimate(item, options, 60) > item.bytes * 0.8;
     return el("div", { className: "line" + (guess ? "" : " skip") }, [
       el("span", { className: "name", textContent: item.name, title: item.name }),
-      el("span", { textContent: !guess ? `${size(item.bytes)}, already this small` : `${size(item.bytes)} → ${range(guess.low, guess.high)}${unsure ? " (may be skipped)" : ""}${item.shrunkFrom != null ? " · already a compressed copy" : ""}${doomed(item) ? " · original deleted" : ""}` }),
+      el("span", { textContent: !guess ? `${size(item.bytes)}, ${item.raw ? "has edits in Photos, so it's skipped" : item.live && !item.video ? "no motion to drop, so it's skipped" : "already this small"}` : `${size(item.bytes)} → ${range(guess.low, guess.high)}${unsure ? " (may be skipped)" : ""}${item.shrunkFrom != null ? " · already a compressed copy" : ""}${doomed(item) ? " · original deleted" : ""}` }),
     ]);
   }));
-  $("stitle").textContent = `Compress ${videos.length} video${videos.length === 1 ? "" : "s"}`;
-  let text = `Total: ${size(before)} → about ${range(low, high)}, freeing ${range(before - high, before - low)}.`;
-  if (options.fps === "keep") text += " The higher figure applies to videos shot at 60 fps.";
+  $("stitle").textContent = `Compress ${countOf(picked)}`;
+  const made = deleting + keeping;
+  let text = made ? `Copies: about ${range(copiesLow, copiesHigh)} for ${size(originals)} of originals.` : "";
+  if (deleting && !keeping) text += ` Once the queue has finished and ${deleting === 1 ? "the original is" : "the originals are"} deleted, that frees about ${range(freedLow, freedHigh)}.`;
+  else if (deleting) text += ` Deleting the ${deleting === 1 ? "original" : `${deleting} originals`} set to go frees about ${range(freedLow, freedHigh)} once the queue has finished; the other ${keeping === 1 ? "original stays" : `${keeping} stay`} until you delete ${keeping === 1 ? "it" : "them"}.`;
+  else if (keeping) text += ` The original${keeping === 1 ? " stays" : "s stay"} until you delete ${keeping === 1 ? "it" : "them"}, so nothing is freed yet; deleting ${keeping === 1 ? "it" : "them"} later frees about ${range(laterLow, laterHigh)}.`;
+  if (hasVideos && options.fps === "keep") text += " The higher figure applies to videos shot at 60 fps.";
+  if (hasRaw) text += " For RAW photos it depends on the camera.";
   if (skipped) text += ` ${skipped} will be skipped.`;
   $("sestimate").textContent = text;
   // Anything picked with Delete is dealt with from this dialog too, so the button says so.
   const deletes = state.toDelete.size, items = `${deletes} item${deletes === 1 ? "" : "s"}`;
-  nothingToShrink = skipped === videos.length;
+  nothingToShrink = skipped === picked.length;
   $("salso").hidden = deletes === 0;
-  $("salso").textContent = `The ${deletes === 1 ? "item" : items} you picked with Delete (${size([...state.toDelete.values()].reduce((sum, item) => sum + item.bytes, 0))}) ${deletes === 1 ? "is" : "are"} deleted as soon as you press the button below. macOS asks you to confirm.`;
+  $("salso").textContent = `The ${deletes === 1 ? "item" : items} you picked with Delete (${size([...state.toDelete.values()].reduce((sum, item) => sum + item.bytes, 0))}) ${deletes === 1 ? "is" : "are"} deleted as soon as you press the button below.`;
+  // When macOS will ask, which differs with what was picked.
+  const atEnd = picked.some(doomed);
+  $("sconfirm").textContent = deletes && atEnd ? "macOS asks you to confirm twice: when you press the button, for the items picked with Delete, and once the queue has finished, for the originals. Deleted items stay in Recently Deleted for 30 days."
+    : atEnd ? "macOS asks you to confirm once, when the whole queue has finished, not after each one. Deleted items stay in Recently Deleted for 30 days."
+    : deletes ? "macOS asks you to confirm when you press the button. Deleted items stay in Recently Deleted for 30 days."
+    : "Nothing is deleted: every original stays until you delete it.";
   $("sstart").textContent = !deletes ? "Start" : nothingToShrink ? `Delete ${items}` : `Start and delete ${items}`;
   $("sstart").disabled = nothingToShrink && deletes === 0;
 }
-// True when every picked video would be skipped as already small enough.
+// True when every picked item would be skipped.
 let nothingToShrink = false;
 function openShrink() {
+  // Deleting is chosen afresh for each batch: a tick left from an earlier one must not carry over.
+  $("sdelete").checked = false;
   renderEstimate();
   $("shrink").classList.add("on");
+  $("shrink").querySelector(".dialog").scrollTop = 0;
 }
 $("scancel").onclick = () => $("shrink").classList.remove("on");
 for (const id of ["sres", "sfps", "scodec", "squality", "sdelete"]) $(id).onchange = renderEstimate;
 $("sstart").onclick = async () => {
-  const videos = selectedVideos();
+  const picked = selectedItems();
   $("shrink").classList.remove("on");
   if (!nothingToShrink) {
     const result = await post("/api/shrink", {
-      ids: videos.map((item) => item.id), ...shrinkOptions(),
+      ids: picked.map((item) => item.id), ...shrinkOptions(),
       deleteOriginal: $("sdelete").checked && state.toShrink.size > 0, deleteOriginalIds: [...state.toBoth.keys()],
     });
     if (!result.ok) return toast(result.error);
     // From here their tiles show progress; originals are marked for deletion as their copies arrive.
-    for (const item of videos) { state.toShrink.delete(item.id); state.toBoth.delete(item.id); }
+    for (const item of picked) { state.toShrink.delete(item.id); state.toBoth.delete(item.id); }
     await pollJobs();
     renderGrid();
   }
-  // Anything picked with Delete goes now. Originals of the videos being shrunk wait for the queue.
+  // Anything picked with Delete goes now. Originals of the items being compressed wait for the queue.
   await deletePicked();
 };
 $("jclear").onclick = async () => { await post("/api/jobs/clear", {}); pollJobs(); };
@@ -753,6 +911,21 @@ $("jclear").onclick = async () => { await post("/api/jobs/clear", {}); pollJobs(
 const ACTIVE = ["queued", "downloading", "encoding", "saving"];
 function jobStatus(job) {
   const percent = Math.round(job.progress * 100) + "%";
+  if (job.kind === "archive") {
+    switch (job.state) {
+      case "queued": return "Waiting";
+      case "downloading": return `Copying to ${job.folder} · ${percent}`;
+      case "done": {
+        const copied = `Copied ${job.files} file${job.files === 1 ? "" : "s"} (${size(job.newBytes)}) to ${job.folder}.`;
+        if (job.dryRun) return copied + " Test run: the original stays.";
+        if (job.originalDeleted) return copied + " Original deleted.";
+        if (job.deletion === "pending") return copied + (state.queueLeft ? " The original will be deleted at the end of the queue." : " Waiting for you to confirm in the Photo Review dialog.");
+        if (job.deletion === "kept") return copied + " Original kept: " + (job.message || "the deletion wasn't confirmed.");
+        return copied;
+      }
+      default: return job.message;
+    }
+  }
   switch (job.state) {
     case "queued": return "Waiting";
     case "downloading": {
@@ -764,10 +937,11 @@ function jobStatus(job) {
         : `waiting for the first 1% of ${size(job.originalBytes)} (${waited} so far)`;
       return "Getting the original from iCloud · " + progress + (job.message ? ". " + job.message : "");
     }
-    case "encoding": return "Re-encoding · " + percent;
+    case "encoding": return job.kind !== "photo" ? "Re-encoding · " + percent : job.item?.raw ? "Converting to 10-bit HEIC" : "Making the HEIC copy";
     case "saving": return "Adding to Photos";
     case "done": {
-      const saved = `${size(job.originalBytes)} → ${size(job.newBytes)}, saves ${Math.round(100 * (1 - job.newBytes / job.originalBytes))}%.`;
+      // "Smaller" rather than "saves": nothing is saved while the original is still there.
+      const saved = `${size(job.originalBytes)} → ${size(job.newBytes)}, ${Math.round(100 * (1 - job.newBytes / job.originalBytes))}% smaller.`;
       if (!job.newItem) return saved + " Test run: nothing was added to Photos.";
       if (job.copyDeleted) return saved + " The smaller copy has since been deleted.";
       if (job.originalDeleted) return saved + " Original deleted.";
@@ -788,19 +962,36 @@ function renderJobs(jobs) {
   const doomed = jobs.filter((job) => job.deleteOriginal && !job.originalDeleted && (ACTIVE.includes(job.state) || job.deletion === "pending")).length;
   $("jnote").hidden = doomed === 0;
   $("jnote").textContent = left
-    ? `${doomed === 1 ? "1 original is" : doomed + " originals are"} set to be deleted. macOS asks you to confirm once, when the whole queue has finished (${left} video${left === 1 ? "" : "s"} still to go), not after each video.`
+    ? `${doomed === 1 ? "1 original is" : doomed + " originals are"} set to be deleted. macOS asks you to confirm once, when the whole queue has finished (${left} still to go), not after each one.`
     : `The queue has finished. macOS is asking you to confirm deleting ${doomed === 1 ? "1 original" : doomed + " originals"}: look for the Photo Review dialog.`;
+  const listed = new Set(jobs.map((job) => job.id));
   for (const [id, row] of jobRows) {
-    if (!jobs.some((job) => job.id === id)) { row.node.remove(); jobRows.delete(id); }
+    if (!listed.has(id)) { row.node.remove(); jobRows.delete(id); }
   }
+  // Where the queue stands, at a glance.
+  const tally = (states) => jobs.filter((job) => states.includes(job.state)).length;
+  $("jcounts").textContent = [[tally(["done"]), "done"], [tally(["downloading", "encoding", "saving"]), "under way"], [tally(["queued"]), "waiting"],
+    [tally(["failed"]), "failed"], [tally(["skipped"]), "skipped"], [tally(["cancelled"]), "cancelled"]]
+    .filter(([n]) => n).map(([n, word]) => `${n.toLocaleString()} ${word}`).join(" · ");
+  // Originals of copies that are in Photos and not set to go: picked for deletion only when asked, once the copies
+  // have been checked.
+  const ready = jobs.filter((job) => job.state === "done" && job.newItem && !job.originalDeleted && !job.copyDeleted && job.deletion !== "pending" && !state.toDelete.has(job.assetId));
+  $("jpick").hidden = ready.length === 0;
+  $("jpick").textContent = `Pick ${ready.length === 1 ? "the original" : `the ${ready.length.toLocaleString()} originals`} for deletion`;
+  $("jpick").onclick = () => {
+    for (const job of ready) toggle("toDelete", job.item);
+    renderJobs(jobs);
+    renderTiles();
+    renderBar();
+  };
   for (const job of jobs) {
     let row = jobRows.get(job.id);
     if (!row) {
-      row = { status: el("div", { className: "status" }), bar: el("div"), action: el("button"), pick: el("button"), reveal: el("button", { textContent: "Open in Photos" }) };
+      row = { status: el("div", { className: "status" }), note: el("div", { className: "note" }), bar: el("div"), action: el("button"), pick: el("button"), reveal: el("button", { textContent: "Open in Photos" }) };
       row.reveal.onclick = () => openInPhotos(job.item);
       row.track = el("div", { className: "track" }, [row.bar]);
       row.node = el("div", { className: "job" }, [
-        el("div", { className: "name", textContent: job.name, title: job.name }), el("div", {}, [row.status, row.track]),
+        el("div", { className: "name", textContent: job.name, title: job.name }), el("div", {}, [row.status, row.note, row.track]),
         el("div", { className: "buttons" }, [row.reveal, row.pick, row.action]),
       ]);
       jobRows.set(job.id, row);
@@ -808,6 +999,9 @@ function renderJobs(jobs) {
     }
     const active = ACTIVE.includes(job.state);
     row.status.textContent = jobStatus(job);
+    // Something worth knowing, such as titles that weren't copied, goes on a line of its own.
+    row.note.textContent = (job.note || "").trim();
+    row.note.hidden = !job.note;
     row.status.classList.toggle("bad", job.state === "failed");
     row.track.hidden = job.state !== "downloading" && job.state !== "encoding";
     row.bar.style.width = Math.round(job.progress * 100) + "%";
@@ -816,7 +1010,10 @@ function renderJobs(jobs) {
     row.action.hidden = !active && !retry && (!job.newItem || job.copyDeleted);
     row.action.onclick = active ? async () => { await post("/api/jobs/cancel", { id: job.id }); pollJobs(); }
       : retry ? async () => {
-        const result = await post("/api/shrink", { ids: [job.assetId], ...job.settings, deleteOriginal: job.deleteOriginal });
+        // A test run tried again is still a test run.
+        const result = job.kind === "archive"
+          ? await post("/api/archive", { ids: [job.assetId], folder: job.folder, dryRun: job.dryRun })
+          : await post("/api/shrink", { ids: [job.assetId], ...job.settings, deleteOriginal: job.deleteOriginal, dryRun: job.dryRun });
         if (!result.ok) toast(result.error);
         pollJobs();
       }
@@ -841,11 +1038,9 @@ async function pollJobs() {
   let finished = 0, removed = 0;
   for (const job of jobs) {
     const before = state.jobs.get(job.id);
-    if (job.state === "done" && job.newItem && !job.deleteOriginal && before && before !== "done") {
-      // Mark the original for deletion so it's ready to go once the new copy has been checked.
-      state.toDelete.set(job.assetId, job.item);
-      finished++;
-    }
+    // A copy has just arrived. Its original isn't picked for deletion by itself: that waits until the copy has been
+    // checked, and is done with the queue's button or the row's.
+    if (job.state === "done" && job.newItem && !job.deleteOriginal && before && before !== "done") finished++;
     // An original deleted by the app itself drops out of the list, so the grid needs a refresh.
     if (job.originalDeleted && !state.gone.has(job.id)) {
       state.gone.add(job.id);
@@ -875,7 +1070,7 @@ async function pollJobs() {
   if (state.viewing) renderViewerBar();
   // The app is answering again after a spell of not responding, so refresh the list too.
   if (state.offline && !state.viewing && !state.busy) await load({ limit: Math.max(PAGE, state.items.length) });
-  if (finished) toast(`${finished} smaller cop${finished === 1 ? "y is" : "ies are"} in Photos. The original${finished === 1 ? " is" : "s are"} marked for deletion; check the cop${finished === 1 ? "y" : "ies"} first.`);
+  if (finished) toast(`${finished} smaller cop${finished === 1 ? "y is" : "ies are"} in Photos. Check ${finished === 1 ? "it" : "them"}, then pick the original${finished === 1 ? "" : "s"} for deletion in the queue.`);
   if (finished || removed) {
     if (!state.viewing && !state.busy) await load({ limit: Math.max(PAGE, state.items.length) });
     else renderBar();
@@ -902,6 +1097,112 @@ $("update").onclick = async () => {
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && SETTLED.includes(state.status) && !state.viewing && !state.busy) load({ limit: Math.max(PAGE, state.items.length) });
 });
+// Pick many: everything in the current view (type and year) at least a chosen size, for one of the three picks.
+// Items that can't be compressed, are compressed already or are in the queue are left out and counted.
+const BULK_PAGE = 2000;
+// Each pick becomes a row in the queue, and thousands of rows slow the page down, so one go picks at most this
+// many, the largest first. Picking again once they're queued gets the next ones.
+const BULK_MAX = 1000;
+// Compressing downloads each original to this Mac first, so a pick for Compress also stops at what the Mac has room
+// for, keeping this much free. That is what limits videos in practice.
+const ROOM_MARGIN = 10e9;
+let bulkFound = [];
+// The items over `minBytes` in the current view, and the free space on this Mac, or null if the app didn't say.
+async function bulkCandidates(minBytes) {
+  // By id, since the list can change between pages and an item could otherwise turn up twice.
+  const found = new Map();
+  let room = null;
+  for (let offset = 0; ; offset += BULK_PAGE) {
+    const params = new URLSearchParams({ offset, limit: BULK_PAGE, kind: state.kind, year: state.year, minBytes });
+    const data = await (await fetch("/api/items?" + params)).json();
+    if (offset === 0) room = data.freeBytes ?? null;
+    for (const item of data.items) found.set(item.id, item);
+    if (data.items.length < BULK_PAGE || offset + data.items.length >= data.matchCount) return { items: [...found.values()], room };
+  }
+}
+let bulkCount = 0;
+async function renderBulk() {
+  const mine = ++bulkCount, action = $("baction").value;
+  $("bcount").textContent = "Counting…";
+  $("bpick").disabled = true;
+  let items, room;
+  try {
+    ({ items, room } = await bulkCandidates(Number($("bmin").value)));
+  } catch (error) {
+    $("bcount").textContent = "Photo Review isn't responding.";
+    return;
+  }
+  // A newer choice in the dialog has started its own count.
+  if (mine !== bulkCount) return;
+  // Compressed copies are left out of Compress: compressing a copy again only loses quality.
+  const eligible = items.filter((item) => !isBusy(item.id) && (action === "toDelete" || (compressible(item) && !shrunkAlready(item) && item.shrunkFrom == null)));
+  const left = items.length - eligible.length;
+  // Room to download: the free space, less the margin and whatever the queue has yet to download.
+  const waiting = [...state.work.values()].filter((job) => job.state === "queued" || job.state === "downloading").reduce((sum, job) => sum + job.originalBytes, 0);
+  const budget = action === "toDelete" || room == null ? Infinity : room - ROOM_MARGIN - waiting;
+  bulkFound = [];
+  let bytes = 0, tooBig = 0;
+  for (const item of eligible) {
+    if (bulkFound.length === BULK_MAX) break;
+    // Largest first, passing over any that wouldn't fit for smaller ones that do.
+    if (bytes + item.bytes > budget) { tooBig++; continue; }
+    bulkFound.push(item);
+    bytes += item.bytes;
+  }
+  const rest = eligible.length - bulkFound.length;
+  const reason = action === "toDelete" ? "already in the queue" : "can't be compressed, already compressed, or in the queue";
+  $("bcount").textContent = !items.length ? "Nothing in this view matches."
+    : !eligible.length ? `Nothing to pick: everything here ${action === "toDelete" ? "is already in the queue" : "is already compressed, can't be compressed, or is in the queue"}.`
+    : budget <= 0 ? `There isn't room on this Mac to download more originals now, as it keeps ${size(ROOM_MARGIN)} free. Free up space, or let the queue finish first.`
+    : !bulkFound.length ? `None of these fit in the ${size(budget)} this Mac has room to download now. Free up space, or let the queue finish first.`
+    : `${countOf(bulkFound)}, ${size(bytes)}.`
+      + (tooBig ? ` That's what fits in the ${size(budget)} this Mac has room to download now, keeping ${size(ROOM_MARGIN)} free. The other ${rest.toLocaleString()} didn't fit; pick again once there's room.`
+        : rest ? ` These are the largest ${BULK_MAX.toLocaleString()} of ${eligible.length.toLocaleString()}; pick many again once they're under way for the next ones.` : "")
+      + (left ? ` ${left.toLocaleString()} more ${left === 1 ? "is" : "are"} left out: ${reason}.` : "");
+  $("bpick").disabled = bulkFound.length === 0;
+  $("bpick").textContent = bulkFound.length ? `Pick ${bulkFound.length.toLocaleString()}` : "Pick";
+}
+$("bulkopen").onclick = () => {
+  const kinds = { all: "everything", video: "videos", photo: "photos", raw: "RAW photos" };
+  $("bscope").textContent = kinds[state.kind] + (state.year === "" ? "" : state.year === "0" ? " with no date" : ` from ${state.year}`);
+  $("bulk").classList.add("on");
+  renderBulk();
+};
+$("bcancel").onclick = () => $("bulk").classList.remove("on");
+$("bmin").onchange = renderBulk;
+$("baction").onchange = renderBulk;
+$("bpick").onclick = () => {
+  const action = $("baction").value;
+  for (const item of bulkFound) {
+    for (const pick of PICKS) state[pick].delete(item.id);
+    state[action].set(item.id, item);
+  }
+  $("bulk").classList.remove("on");
+  toast(`Picked ${countOf(bulkFound)} (${size(bulkFound.reduce((sum, item) => sum + item.bytes, 0))}). Press the button at the bottom to go ahead.`);
+  renderGrid();
+};
+
+// Says when a newer version of the app is out. "Not now" hides it until the one after that.
+async function checkVersion() {
+  clearTimeout(checkVersion.timer);
+  let info = null;
+  try { info = await (await fetch("/api/version")).json(); } catch (error) {}
+  // Until the app's own check has an answer, look again every minute; after that, a few times a day.
+  checkVersion.timer = setTimeout(checkVersion, info?.latest ? 6 * 60 * 60 * 1000 : 60 * 1000);
+  if (!info) return;
+  let dismissed = "";
+  try { dismissed = localStorage.getItem("update-dismissed") || ""; } catch (error) {}
+  $("updatebar").hidden = !info.available || dismissed === info.latest;
+  if ($("updatebar").hidden) return;
+  $("updatetext").textContent = `Photo Review ${info.latest} is available (you have ${info.current}).`;
+  if (info.url) $("updatelink").href = info.url;
+  $("updatelater").onclick = () => {
+    try { localStorage.setItem("update-dismissed", info.latest); } catch (error) {}
+    $("updatebar").hidden = true;
+  };
+}
+checkVersion();
+
 // The guide to the three buttons can be put away. The choice is kept in this browser only, and the
 // page works the same if the browser won't keep it.
 function showGuide(show) {

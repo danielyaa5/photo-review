@@ -9,11 +9,13 @@
   :root {
     --bg: #f5f5f2; --card: #ffffff; --fg: #1b1b1d; --muted: #6a6a70; --line: #e1e1dc;
     --accent: #0a62d0; --danger: #c22f28; --good: #1a7f37;
+    --accent-fill: #0a62d0;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #151517; --card: #212124; --fg: #f1f1f2; --muted: #9b9ba2; --line: #34343a;
       --accent: #63a6ff; --danger: #ff6a60; --good: #4cc26b;
+      --accent-fill: #2563eb;
     }
   }
   * { box-sizing: border-box; }
@@ -71,7 +73,7 @@
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
   .seg button { border: 0; border-radius: 0; background: var(--card); }
   .seg button + button { border-left: 1px solid var(--line); }
-  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  .seg button[aria-pressed="true"] { background: var(--accent-fill); color: #fff; }
   td.none { color: var(--muted); padding: 18px 14px; }
   td.sizes { white-space: nowrap; }
   .empty { background: var(--card); border: 1px dashed var(--line); border-radius: 12px; padding: 22px; color: var(--muted); margin-top: 16px; }
@@ -149,10 +151,20 @@ function span(seconds) {
 }
 const when = (time) => new Date(time).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 const plural = (count, word) => `${count.toLocaleString()} ${word}${count === 1 ? "" : "s"}`;
-function settings(s) {
+// Compressions recorded before RAW photos could be compressed were all of videos.
+const kindOf = (e) => e.kind || "video";
+// "37 videos", "2 photos" or "37 videos and 2 photos".
+function things(events) {
+  const photos = events.filter((e) => kindOf(e) === "photo").length, videos = events.length - photos;
+  return [videos ? plural(videos, "video") : "", photos ? plural(photos, "photo") : ""].filter(Boolean).join(" and ");
+}
+function settings(s, kind = "video", made = "") {
   if (!s) return "";
-  const parts = [s.resolution === "keep" ? "original size" : s.resolution === "2160" ? "4K" : s.resolution + "p",
-    s.fps === "keep" ? "original frame rate" : s.fps + " fps", s.codec === "h264" ? "H.264" : "HEVC", s.quality];
+  const resolution = s.resolution === "keep" ? "original size" : s.resolution === "2160" ? "4K" : s.resolution + "p";
+  // What a photo became: a RAW one a 10-bit HEIC, a JPEG one a HEIC, and a Live Photo's HEIC still stays as it was.
+  // Frame rate and format are video settings.
+  if (kind === "photo") return made === "still" ? "the HEIC still as it was" : [resolution, made === "raw" ? "10-bit HEIC" : "HEIC", s.quality].join(", ");
+  const parts = [resolution, s.fps === "keep" ? "original frame rate" : s.fps + " fps", s.codec === "h264" ? "H.264" : "HEVC", s.quality];
   return parts.join(", ");
 }
 function tile(label, value, note) {
@@ -251,7 +263,7 @@ function render(data) {
   const net = savedByShrinking + savedByDeleting - waitingCopies;
 
   const parts = [
-    ...(replaced.length ? [`${size(savedByShrinking)} from compressing ${plural(replaced.length, "video")}`] : []),
+    ...(replaced.length ? [`${size(savedByShrinking)} from compressing ${things(replaced)}`] : []),
     ...(outright.length ? [`${size(savedByDeleting)} from deleting ${plural(outright.length, "item")} outright`] : []),
   ];
   const hero = el("div", { className: "hero" }, [
@@ -259,13 +271,13 @@ function render(data) {
     el("div", { className: "value", textContent: size(net) }),
     el("div", { className: "note", textContent:
       (parts.length ? parts.join(", plus ") + ". " : "") +
-      (waiting.length ? `${plural(waiting.length, "smaller copy").replace("copys", "copies")} (${size(waitingCopies)}) ${waiting.length === 1 ? "sits" : "sit"} next to ${waiting.length === 1 ? "its original" : "their originals"} for now; deleting ${waiting.length === 1 ? "that original" : "those originals"} would save another ${size(waitingBytes)}. ` : "") +
+      (waiting.length ? `${plural(waiting.length, "smaller copy").replace("copys", "copies")} (${size(waitingCopies)}) ${waiting.length === 1 ? "sits" : "sit"} next to ${waiting.length === 1 ? "its original" : "their originals"} for now; deleting ${waiting.length === 1 ? "that original" : "those originals"} would free another ${size(waitingBytes)}. ` : "") +
       "Deleted items sit in Recently Deleted for 30 days, and iCloud space is freed when they leave it." }),
   ]);
 
   const outcomes = ["done", "failed", "skipped", "cancelled"].map((o) => [o, shrinks.filter((e) => e.outcome === o).length]).filter(([, n]) => n);
   const tiles = el("div", { className: "tiles" }, [
-    tile("Saved by compressing", size(savedByShrinking), replaced.length ? `${plural(replaced.length, "video")}: ${size(shrunkBefore)} → ${size(shrunkAfter)}` : "No originals replaced yet"),
+    tile("Saved by compressing", size(savedByShrinking), replaced.length ? `${things(replaced)}: ${size(shrunkBefore)} → ${size(shrunkAfter)}` : "No originals replaced yet"),
     tile("Saved by deleting", size(savedByDeleting), outright.length ? plural(outright.length, "item") + " deleted outright" : "Nothing deleted outright"),
     tile("Ready to free", size(waitingBytes), waiting.length ? plural(waiting.length, "original") + " with a smaller copy" : "No originals waiting"),
     tile("Compression attempts", shrinks.length.toLocaleString(), outcomes.map(([o, n]) => `${n} ${o === "done" ? "completed" : o}`).join(", ") || "None yet"),
@@ -280,11 +292,11 @@ function render(data) {
   const on = (id) => deletedAt.has(id) ? " " + when(deletedAt.get(id)) : "";
   const results = { done: "✓ Compressed", failed: "✕ Compression failed", skipped: "Compression skipped", cancelled: "Compression cancelled" };
   const rows = [];
-  // Only videos are ever compressed, so showing photos leaves just the deletions.
-  for (const e of filter.kind === "photo" ? [] : shrinks) {
+  for (const e of shrinks) {
+    if (filter.kind !== "all" && kindOf(e) !== filter.kind) continue;
     const finished = e.outcome === "done";
     const taken = [e.downloadSeconds ? span(e.downloadSeconds) + " download" : "", e.encodeSeconds ? span(e.encodeSeconds) + " encode" : ""].filter(Boolean).join(", ");
-    const details = el("td", { className: "details" }, [el("div", { textContent: taken }), el("div", { textContent: settings(e.settings) })]);
+    const details = el("td", { className: "details" }, [el("div", { textContent: taken }), el("div", { textContent: settings(e.settings, kindOf(e), e.made) })]);
     const outcome = el("div", { className: "outcome " + e.outcome, textContent: results[e.outcome] || e.outcome });
     if (!finished) {
       rows.push({ time: Date.parse(e.time), saved: 0, size: e.originalBytes, node: el("tr", { className: "unfinished" }, [
@@ -321,6 +333,10 @@ function render(data) {
       el("td", { className: "name" }, [el("div", { textContent: e.name }), links]), details,
     ]) });
   }
+  // Items copied to a folder before they were deleted, and where to.
+  const archivedTo = new Map(events.filter((e) => e.type === "archive" && e.outcome === "done").map((e) => [e.assetId, e.folder]));
+  // One deletion can take items copied to different folders.
+  const copiedTo = (folders) => new Set(folders).size === 1 ? `Copied to ${folders[0]} first` : `Copied to ${new Set(folders).size} folders first`;
   for (const e of deletes) {
     // Originals replaced by a smaller copy, and deleted smaller copies, are already told by their shrink's row.
     // With videos or photos picked, a deletion that took both shows only the matching items and their size.
@@ -332,7 +348,8 @@ function render(data) {
     rows.push({ time: Date.parse(e.time), saved: bytes, size: bytes, node: el("tr", {}, [
       cell(when(e.time), "when"),
       el("td", { className: "number" }, [el("span", { className: "figure saved", textContent: size(bytes) })]), cell(size(bytes), "sizes"),
-      el("td", { className: "result" }, [el("div", { className: "outcome deleted", textContent: "Deleted" })]),
+      el("td", { className: "result" }, [el("div", { className: "outcome deleted", textContent: "Deleted" }),
+        ...(items.every((item) => archivedTo.has(item.id)) ? [el("div", { className: "sub", textContent: copiedTo(items.map((item) => archivedTo.get(item.id))) })] : [])]),
       cell(items.length === 1 ? names : `${plural(items.length, "item")}: ${names}`, "name"), cell("", "details"),
     ]) });
   }
@@ -342,7 +359,7 @@ function render(data) {
     return (sort.descending ? -by : by) || b.time - a.time;
   });
   const nodes = rows.length ? rows.map((row) => row.node) : [el("tr", {}, [el("td", { colSpan: 6, className: "none",
-    textContent: filter.kind === "photo" ? "No photos deleted yet." : "No videos compressed or deleted yet." })])];
+    textContent: filter.kind === "photo" ? "No photos compressed or deleted yet." : filter.kind === "video" ? "No videos compressed or deleted yet." : "Nothing compressed or deleted yet." })])];
   sections.push(el("h2", { textContent: "History" }),
     el("div", { className: "historybar" }, [
       el("p", { className: "muted caption", textContent: "Everything compressed or deleted here. A compressed video and what became of its original share one row. Click When, Saved or Size to sort." }),

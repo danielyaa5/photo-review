@@ -73,8 +73,8 @@
   #fresh { color: var(--muted); font-size: 13px; margin-top: 2px; }
   /* What the three buttons on each tile do, spelled out once at the top. It can be put away. */
   #guide { margin-top: 12px; padding: 14px 16px 10px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
-  #guide .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px 26px; }
-  #guide .step { display: flex; gap: 12px; align-items: flex-start; }
+  #guide .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 14px 26px; }
+  #guide .step { display: flex; gap: 12px; align-items: flex-start; min-width: 0; }
   #guide .ico { flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
   #guide .ico.delete { color: var(--danger); background: color-mix(in srgb, var(--danger) 13%, transparent); }
   /* Compress & delete shows what it does: the Compress tile stacked over the Delete tile, in the same 36px column. */
@@ -96,7 +96,7 @@
   .seg button[aria-pressed="true"] { background: var(--accent-fill); color: #fff; }
   #match { color: var(--muted); margin-left: auto; }
 
-  main { padding: 4px 20px 110px; max-width: 1500px; margin: 0 auto; }
+  main { padding: 4px 20px calc(var(--selection-height, 0px) + 28px); max-width: 1500px; margin: 0 auto; }
   #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
   .card.shrinking { outline: 3px solid var(--accent); outline-offset: -1px; }
@@ -132,12 +132,14 @@
   #more { display: block; margin: 22px auto 0; padding: 9px 22px; }
   .notice { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; max-width: 620px; }
 
-  #bar { position: fixed; left: 186px; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line); padding: 12px 20px; display: none; align-items: center; gap: 12px; }
+  #bar { position: fixed; left: 186px; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line); padding: 12px 20px; display: none; flex-wrap: wrap; align-items: center; gap: 10px 12px; max-height: 45vh; overflow-y: auto; z-index: 5; }
   #bar.on { display: flex; }
-  #bar .count { font-weight: 650; }
+  #bar .count { font-weight: 650; flex: 0 1 auto; }
+  #bar button { flex: 0 1 auto; max-width: 100%; }
+  #bar #clear { margin-left: auto; }
   #bar .count.second { border-left: 1px solid var(--line); padding-left: 12px; }
-  #bar .hint { color: var(--muted); font-size: 12px; flex: 1; }
-  #toast { position: fixed; left: 50%; bottom: 80px; transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 9px 16px; border-radius: 8px; display: none; max-width: 80vw; }
+  #bar .hint { color: var(--muted); font-size: 12px; flex: 1 0 100%; order: 1; }
+  #toast { position: fixed; left: 50%; bottom: calc(var(--selection-height, 0px) + 16px); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 9px 16px; border-radius: 8px; display: none; max-width: 80vw; }
 
   #jobs { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
   #jobs .head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
@@ -208,7 +210,7 @@
     #sources button { width: auto; margin: 0; }
     #bar { left: 0; }
     header { padding: 16px 14px 10px; }
-    main { padding: 4px 14px 190px; }
+    main { padding: 4px 14px calc(var(--selection-height, 0px) + 24px); }
     #match { margin-left: 0; flex-basis: 100%; }
     .job { grid-template-columns: 1fr; }
     #bar { flex-wrap: wrap; padding: 10px 14px; gap: 8px; }
@@ -216,8 +218,9 @@
     #bar .count { flex-basis: 100%; }
     #bar .count.second { border-left: 0; padding-left: 0; }
     #bar .hint { order: 5; flex-basis: 100%; }
-    #bar #act { flex: 3; white-space: nowrap; }
-    #bar #clear { flex: 1; }
+    #bar #act { flex: 1 1 220px; }
+    #bar #archive { flex: 1 1 220px; }
+    #bar #clear { flex: 0 0 auto; }
     .overlay label { flex-direction: column; align-items: stretch; gap: 4px; }
     .overlay select { width: 100%; }
     #spreview .line { flex-direction: column; gap: 0; white-space: normal; }
@@ -225,6 +228,50 @@
     #viewbar .title { flex: 1 1 100%; overflow-wrap: anywhere; }
     #viewbar button { flex: 1; padding: 6px 8px; white-space: nowrap; }
     #viewbar .keys { display: none; }
+  }
+  .top { flex-wrap: wrap; }
+  .top .links { flex-wrap: wrap; }
+  body.walkthrough header, body.walkthrough main > :not(#walkthrough), body.walkthrough #bar, body.walkthrough #toast { display: none !important; }
+  #walkthrough { max-width: 1120px; margin: 14px auto 0; }
+  #walkthrough .tour-subtitle { color: var(--muted); margin: 4px 0 20px; }
+  .tour-panel { background: var(--card); border: 1px solid var(--accent); border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+  .tour-head, .tour-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .tour-head { color: var(--muted); font-size: 12px; margin-bottom: 10px; }
+  .tour-title { margin: 0 0 8px; font-size: 20px; }
+  .tour-title:focus { outline: none; }
+  .tour-panel p { color: var(--muted); margin: 0 0 16px; max-width: 680px; }
+  .tour-controls { margin-top: 16px; }
+  .tour-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 14px; }
+  .tour-card { min-width: 0; background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .tour-card.picked { box-shadow: 0 0 0 2px var(--accent); }
+  .tour-thumb { position: relative; height: 135px; background: color-mix(in srgb, var(--accent) 10%, var(--bg)); }
+  .tour-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .tour-thumb .sample { background: var(--shade); color: white; padding: 2px 6px; border-radius: 4px; }
+  .tour-queue { margin-top: 18px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+  .tour-queue .job { grid-template-columns: minmax(100px, 1fr) minmax(120px, 2fr); }
+  .tour-thumb .sample { position: absolute; bottom: 8px; right: 8px; font-size: 12px; }
+  .tour-info { padding: 12px; }
+  .tour-info strong { display: block; font-size: 18px; }
+  .tour-info p { margin: 3px 0 12px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+  .tour-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .tour-actions button { padding: 7px 6px; min-width: 0; }
+  .tour-actions button:first-child { grid-column: 1 / -1; color: var(--accent); border-color: var(--accent); }
+  .tour-actions button[data-choice="delete"] { color: var(--danger); border-color: var(--danger); }
+  .tour-actions button[aria-pressed="true"] { background: var(--accent-fill); color: white; border-color: var(--accent-fill); }
+  .tour-review { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-top: 22px; }
+  .tour-review strong { margin-right: auto; }
+  .tour-highlight { outline: 2px solid var(--accent); outline-offset: 5px; border-radius: 10px; }
+  .tour-feedback { min-height: 20px; color: var(--muted); margin: 16px 0 0; font-size: 13px; }
+  .tour-sources { display: grid; gap: 10px; max-width: 570px; margin-top: 22px; }
+  .tour-source { display: flex; align-items: center; gap: 12px; padding: 14px; text-align: left; }
+  .tour-source svg { width: 24px; height: 24px; color: var(--accent); flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .tour-source strong { display: block; }
+  .tour-source small { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
+  @media (max-width: 760px) {
+    .tour-panel { padding: 16px; }
+    .tour-review button { flex: 1 1 150px; }
+    .tour-review strong { flex-basis: 100%; }
+    .tour-head .link { padding: 6px 0; }
   }
 </style>
 </head>
@@ -240,7 +287,7 @@
 <div id="content">
 <header>
   <button id="folderback" class="link" hidden>‹ All folders</button>
-  <div class="top"><h1 id="title">Apple Photos</h1><span class="links"><button id="guideshow" class="link" hidden>What the buttons do</button><a href="/stats">Savings and history</a></span></div>
+  <div class="top"><h1 id="title">Apple Photos</h1><span class="links"><button id="tourshow" class="link">Quick tour</button><button id="guideshow" class="link" hidden>What the buttons do</button><a href="/stats">Savings and history</a></span></div>
   <div id="summary">Loading…</div>
   <div id="fresh" hidden><span id="freshtext"></span> <button id="update" class="link">Measure again</button></div>
   <div id="updatebar" class="notice" hidden><span id="updatetext"></span> <a id="updatelink" href="https://github.com/danielyaa5/photo-review/releases/latest" target="_blank" rel="noopener noreferrer">Download it</a> · <button id="updatelater" class="link">Not now</button></div>
@@ -280,6 +327,7 @@
 </header>
 
 <main>
+  <section id="walkthrough" aria-labelledby="tour-title" hidden></section>
   <div id="notice" class="notice" hidden></div>
   <div id="sizeaccess" class="notice" hidden><span id="sizeaccessmessage"></span> <button id="choosesizelibrary">Choose Photos Library…</button></div>
   <section id="jobs" hidden>
@@ -306,9 +354,17 @@
   <button id="clear">Clear</button>
 </div>
 
+<div id="tourdelete" class="overlay">
+  <div class="dialog" role="dialog" aria-labelledby="tourdeletetitle">
+    <h2 id="tourdeletetitle">Delete selected items?</h2>
+    <p>Walkthrough · sample files. In your library, macOS asks for confirmation before deleting Photos items. This example won’t delete any files.</p>
+    <div class="row"><button id="tourdeletecancel">Cancel</button><button id="tourdeleteconfirm" class="danger">Delete</button></div>
+  </div>
+</div>
 <div id="shrink" class="overlay">
   <div class="dialog" role="dialog" aria-labelledby="stitle">
     <h2 id="stitle">Compress videos</h2>
+    <p id="stour" class="notice" hidden>Walkthrough · sample files. These settings work just like your library, but no files will be changed.</p>
     <p id="sintro">Each one is downloaded from iCloud at full quality if it isn't on this Mac, made smaller here, and added to Photos as a new item with the same date, location, favorite and albums. Big videos can take hours.</p>
     <!-- What happens to the originals comes first: it's what matters most. -->
     <div id="soriginals">
@@ -433,6 +489,9 @@ function toast(message) {
 }
 // Always resolves to an object with `ok`, so callers only need to show `error`.
 async function post(path, body) {
+  if (walkthrough.active || body?.ids?.some((id) => String(id).startsWith("tour:"))) {
+    return { ok: false, error: "Sample files cannot be sent for processing." };
+  }
   try {
     const response = await fetch(path, { method: "POST", headers: { "X-Token": TOKEN, "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (response.status === 403) {
@@ -460,8 +519,18 @@ $("choosesizelibrary").onclick = async () => {
 };
 const SETTLED = ["ready", "denied", "limited", "missing", "needsLibrary"];
 let loadCount = 0;
+let photosStart = null;
+async function startPhotos() {
+  if (!photosStart) photosStart = post("/api/photos/start", {}).then((result) => {
+    if (!result.ok) { photosStart = null; throw new Error(result.error || "Couldn't connect to Photos."); }
+  });
+  return photosStart;
+}
 async function load({ offset = 0, limit = PAGE, append = false } = {}) {
+  if (walkthrough.active) return;
   if (state.source !== "photos" && !state.folder) return renderFolders();
+  try { if (state.source === "photos") await startPhotos(); }
+  catch (error) { $("summary").textContent = error.message; state.offline = true; return; }
   const mine = ++loadCount;
   const params = new URLSearchParams({ offset, limit, kind: state.kind, year: state.year });
   if (state.folder) { params.set("source", "folder"); params.set("folder", state.folder.path); }
@@ -475,7 +544,7 @@ async function load({ offset = 0, limit = PAGE, append = false } = {}) {
   }
   state.offline = false;
   // A slower, older request must not overwrite the list a newer one (say, after a filter change) produced.
-  if (mine !== loadCount) return;
+  if (mine !== loadCount || walkthrough.active) return;
   state.status = data.status;
   // While the library is being measured or updated, keep checking. Scheduling it here, from whichever
   // request actually got applied, means a superseded request can't leave the page stuck mid-update.
@@ -692,6 +761,18 @@ function renderTiles() {
   }
 }
 
+// Reserve the bar's actual height as selections and window dimensions change.
+new ResizeObserver(() => {
+  document.documentElement.style.setProperty("--selection-height", `${$("bar").getBoundingClientRect().height}px`);
+}).observe($("bar"));
+
+function actionLabel(picks, busy = false) {
+  const shrinks = picks.toShrink.size + picks.toBoth.size, deletes = picks.toDelete.size;
+  return busy ? "Confirm in the Photo Review dialog…"
+    : shrinks && deletes ? `Compress ${shrinks} and delete ${deletes}…`
+    : shrinks ? `Compress ${countOf([...picks.toShrink.values(), ...picks.toBoth.values()])}…`
+    : `Delete ${deletes} item${deletes === 1 ? "" : "s"}…`;
+}
 function renderBar() {
   const total = (map) => [...map.values()].reduce((sum, item) => sum + item.bytes, 0);
   const both = state.toBoth.size, shrinks = state.toShrink.size + both, deletes = state.toDelete.size;
@@ -703,10 +784,7 @@ function renderBar() {
   $("deletecount").textContent = `${deletes} to delete · ${size(total(state.toDelete))}`;
   // One button for whatever has been picked. It is red only when deleting is all it will do.
   const act = $("act");
-  act.textContent = state.busy ? "Confirm in the Photo Review dialog…"
-    : shrinks && deletes ? `Compress ${shrinks} and delete ${deletes}…`
-    : shrinks ? `Compress ${countOf([...state.toShrink.values(), ...state.toBoth.values()])}…`
-    : `Delete ${deletes} item${deletes === 1 ? "" : "s"}…`;
+  act.textContent = actionLabel(state, state.busy);
   act.className = shrinks ? "primary" : "danger";
   act.disabled = state.busy;
   // Anything picked with Delete can instead be copied to a folder first, and deleted once that's done.
@@ -864,6 +942,8 @@ $("vreveal").onclick = () => openInPhotos(state.viewing);
 $("stage").onclick = (event) => { if (event.target === $("stage")) closeViewer(); };
 document.addEventListener("keydown", (event) => {
   if ($("shrink").classList.contains("on")) { if (event.key === "Escape") $("shrink").classList.remove("on"); return; }
+  if ($("tourdelete").classList.contains("on")) { if (event.key === "Escape") $("tourdelete").classList.remove("on"); return; }
+  if (walkthrough.active) { if (event.key === "Escape") finishWalkthrough(); return; }
   if ($("bulk").classList.contains("on")) { if (event.key === "Escape") $("bulk").classList.remove("on"); return; }
   if (!state.viewing || event.metaKey || event.ctrlKey || event.altKey) return;
   if (event.key === "Escape") closeViewer();
@@ -877,7 +957,16 @@ document.addEventListener("keydown", (event) => {
 
 // Shrinking
 // Everything picked for Compress or Compress & delete: videos and RAW photos.
-const selectedItems = () => [...state.toShrink.values(), ...state.toBoth.values()];
+function currentPicks() {
+  if (!walkthrough.active) return state;
+  const picks = { toShrink: new Map(), toBoth: new Map(), toDelete: new Map() };
+  for (const [index, choice] of walkthrough.picks) {
+    const item = TOUR_FILES[index];
+    picks[{ compress: "toShrink", both: "toBoth", delete: "toDelete" }[choice]].set(item.id, item);
+  }
+  return picks;
+}
+const selectedItems = () => { const picks = currentPicks(); return [...picks.toShrink.values(), ...picks.toBoth.values()]; };
 const shrinkOptions = () => ({ resolution: $("sres").value, fps: $("sfps").value, codec: $("scodec").value, quality: $("squality").value });
 
 // Mirrors ShrinkSettings.bitrate in main.swift, plus a small allowance for audio. The original frame rate
@@ -926,6 +1015,7 @@ function range(low, high) {
   return size(low) === size(high) ? size(low) : `${size(low)} to ${size(high)}`;
 }
 function renderEstimate() {
+  const picks = currentPicks();
   const picked = selectedItems(), options = shrinkOptions();
   // Frame rate, format and the HDR note are about videos; the other notes are for the kinds of item picked.
   const hasVideos = picked.some((item) => item.video), hasRaw = picked.some((item) => item.raw), hasLive = picked.some((item) => item.live);
@@ -935,7 +1025,7 @@ function renderEstimate() {
   $("slosses").hidden = !hasRaw && !hasLive;
   $("sjpeg").hidden = !picked.some((item) => item.jpeg);
   // Items picked with Compress & delete lose their original either way; the tick box decides for the rest.
-  const both = state.toBoth.size, plain = state.toShrink.size;
+  const both = picks.toBoth.size, plain = picks.toShrink.size;
   const the = (items) => items.length === 1 ? countOf(items).slice(2) : countOf(items);
   // Files in a folder: the copies go in its Compressed folder, and deleted originals go to the Trash.
   const files = picked.some(isFileItem), drive = files && state.source === "drive";
@@ -947,11 +1037,11 @@ function renderEstimate() {
   $("sdetails").hidden = $("sedits").hidden = files;
   $("sroom").hidden = files && !drive;
   $("sboth").hidden = both === 0;
-  $("sboth").textContent = `The original${both === 1 ? "" : "s"} of the ${the([...state.toBoth.values()])} picked with Compress & delete ${both === 1 ? "is" : "are"} ${gone} once the whole queue has finished.`;
+  $("sboth").textContent = `The original${both === 1 ? "" : "s"} of the ${the([...picks.toBoth.values()])} picked with Compress & delete ${both === 1 ? "is" : "are"} ${gone} once the whole queue has finished.`;
   $("sdeleterow").hidden = plain === 0;
   $("sdeletetext").textContent = both === 0 ? (files ? `Move each original to ${trash} once its smaller copy is saved` : "Delete each original once its smaller copy is in Photos")
-    : `${files ? "Move" : "Delete"} the original${plain === 1 ? "" : "s"} of the other ${the([...state.toShrink.values()])}${files ? ` to ${trash}` : ""} as well`;
-  const doomed = (item) => state.toBoth.has(item.id) || $("sdelete").checked;
+    : `${files ? "Move" : "Delete"} the original${plain === 1 ? "" : "s"} of the other ${the([...picks.toShrink.values()])}${files ? ` to ${trash}` : ""} as well`;
+  const doomed = (item) => picks.toBoth.has(item.id) || $("sdelete").checked;
   // Only originals that are deleted free anything; a kept one stays, and its copy uses space alongside it.
   let originals = 0, copiesLow = 0, copiesHigh = 0, skipped = 0, deleting = 0, keeping = 0, unknown = 0, guessedVideos = false;
   let freedLow = 0, freedHigh = 0, laterLow = 0, laterHigh = 0;
@@ -986,10 +1076,10 @@ function renderEstimate() {
   if (skipped) text += ` ${skipped} will be skipped.`;
   $("sestimate").textContent = text.trim();
   // Anything picked with Delete is dealt with from this dialog too, so the button says so.
-  const deletes = state.toDelete.size, items = `${deletes} item${deletes === 1 ? "" : "s"}`;
+  const deletes = picks.toDelete.size, items = `${deletes} item${deletes === 1 ? "" : "s"}`;
   nothingToShrink = skipped === picked.length;
   $("salso").hidden = deletes === 0;
-  $("salso").textContent = `The ${deletes === 1 ? "item" : items} you picked with Delete (${size([...state.toDelete.values()].reduce((sum, item) => sum + item.bytes, 0))}) ${deletes === 1 ? "is" : "are"} ${gone} as soon as you press the button below.`;
+  $("salso").textContent = `The ${deletes === 1 ? "item" : items} you picked with Delete (${size([...picks.toDelete.values()].reduce((sum, item) => sum + item.bytes, 0))}) ${deletes === 1 ? "is" : "are"} ${gone} as soon as you press the button below.`;
   // When macOS will ask, which differs with what was picked.
   const atEnd = picked.some(doomed);
   const asker = files ? "Photo Review asks" : "macOS asks", them = picked.filter(doomed).length + deletes === 1 ? "it" : "them";
@@ -1004,6 +1094,7 @@ function renderEstimate() {
 // True when every picked item would be skipped.
 let nothingToShrink = false;
 function openShrink() {
+  $("stour").hidden = !walkthrough.active;
   // Deleting is chosen afresh for each batch: a tick left from an earlier one must not carry over.
   $("sdelete").checked = false;
   renderEstimate();
@@ -1013,6 +1104,11 @@ function openShrink() {
 $("scancel").onclick = () => $("shrink").classList.remove("on");
 for (const id of ["sres", "sfps", "scodec", "squality", "sdelete"]) $(id).onchange = renderEstimate;
 $("sstart").onclick = async () => {
+  if (walkthrough.active) {
+    $("shrink").classList.remove("on");
+    startTourQueue();
+    return;
+  }
   const picked = selectedItems();
   $("shrink").classList.remove("on");
   if (!nothingToShrink) {
@@ -1204,8 +1300,6 @@ async function pollJobs() {
   const lively = jobs.some((job) => ACTIVE.includes(job.state) || (job.deletion === "pending" && !job.originalDeleted));
   pollJobs.timer = setTimeout(pollJobs, lively ? 1500 : 6000);
 }
-pollJobs();
-
 // While the library is still being measured, keep the first page fresh.
 async function poll() {
   clearTimeout(poll.timer);
@@ -1334,6 +1428,7 @@ checkVersion();
 const PHOTOS_FOOT = "Pick what you want on each item, then press the button that appears at the bottom. macOS asks you to confirm before anything is deleted, and deleted items stay in Recently Deleted for 30 days.";
 const FILES_FOOT = "Pick what you want on each item, then press the button that appears at the bottom. Smaller copies go in a Compressed folder inside this one, and Photo Review asks before moving anything to the Trash.";
 const ICONS = {
+  photo: '<rect x="3" y="5" width="14" height="14" rx="2"/><path d="M7 3h12a2 2 0 0 1 2 2v12"/><circle cx="8.5" cy="10" r="1.5"/><path d="m17 16-4-4-7 7"/>',
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
   add: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M12 10v6M9 13h6"/>',
   cloud: '<path d="M17.5 19H8a6 6 0 1 1 5.7-7.9A4.5 4.5 0 1 1 17.5 19Z"/>',
@@ -1363,6 +1458,7 @@ function setView() {
 }
 function switchTo(source, folder = null) {
   if (state.busy) return;
+  if (walkthrough.active) { finishWalkthrough(source); return; }
   if (state.viewing) closeViewer();
   state.source = source;
   state.folder = folder;
@@ -1476,9 +1572,183 @@ function showGuide(show) {
 $("guidehide").onclick = () => showGuide(false);
 $("guideshow").onclick = () => showGuide(true);
 try { if (localStorage.getItem("guide") === "hidden") showGuide(false); } catch (error) {}
+// First-use practice stays separate from real items, picks and processing requests.
+const walkthrough = { active: false, step: 0, picks: new Map(), feedback: "", queue: [], queueTimers: [] };
+const WALKTHROUGH_KEY = "walkthrough-v1";
+const TOUR_FILES = [
+  { id: "tour:0", name: "Coast walk.mov", bytes: 8_420_000_000, thumb: "coast", video: true, w: 3840, h: 2160, dur: 704, tags: [] },
+  { id: "tour:1", name: "Shoreline.mov", bytes: 5_160_000_000, thumb: "shore", video: true, w: 3840, h: 2160, dur: 425, tags: [] },
+  { id: "tour:2", name: "Evening sky.mov", bytes: 2_780_000_000, thumb: "sky", video: true, w: 3840, h: 2160, dur: 260, tags: [] },
+];
+const TOUR_STEPS = [
+  ["Your biggest files, first.", "A few large videos can use more space than thousands of photos. Start at the top. These are sample files, so you can practice without changing anything.", "Show me the actions"],
+  ["Three choices. You’re in control.", "Try a button on a sample file. Compress keeps the original. Compress & delete removes the original after the smaller copy is ready and the queue has finished.", "What happens next?"],
+  ["Review, then start.", "Your picks collect here. Change them or clear them before starting. Choose Compress to review the settings, then Start. This example won’t touch your files. macOS asks before items are deleted from Photos.", "Got it"],
+];
+function walkthroughBlocked() {
+  return state.busy || state.queueLeft || state.viewing || PICKS.some((key) => state[key].size)
+    || [...state.work.values()].some((job) => job.deletion === "pending" && !job.originalDeleted);
+}
+function startWalkthrough() {
+  if (walkthroughBlocked()) {
+    return toast("Finish your current picks or queue before opening the walkthrough.");
+  }
+  walkthrough.active = true;
+  walkthrough.step = 0;
+  walkthrough.picks.clear();
+  resetTourQueue();
+  walkthrough.feedback = "";
+  clearTimeout(poll.timer);
+  document.body.classList.add("walkthrough");
+  $("walkthrough").hidden = false;
+  renderWalkthrough(true);
+  window.scrollTo(0, 0);
+}
+function finishWalkthrough(source = "local") {
+  resetTourQueue();
+  $("shrink").classList.remove("on");
+  $("tourdelete").classList.remove("on");
+  walkthrough.active = false;
+  document.body.classList.remove("walkthrough");
+  $("walkthrough").hidden = true;
+  try { localStorage.setItem(WALKTHROUGH_KEY, "done"); } catch (error) {}
+  showGuide(false);
+  switchTo(source);
+  $("title").setAttribute("tabindex", "-1");
+  $("title").focus({ preventScroll: true });
+}
+function renderWalkthrough(focusHeading = false) {
+  const section = $("walkthrough");
+  if (walkthrough.step === 3) {
+    const title = el("h2", { className: "tour-title", id: "tour-title", textContent: "Ready for your own files?", tabIndex: -1 });
+    const sources = el("div", { className: "tour-sources" }, [
+      ["photos", "Choose Photos access when macOS asks. Read file sizes without downloading every original.", ICONS.photo],
+      ["drive", "Choose a folder from Google Drive for desktop.", ICONS.cloud],
+      ["local", "Choose a folder on your Mac or an external drive.", ICONS.folder],
+    ].map(([source, description, paths]) => {
+      const button = el("button", { className: "tour-source", type: "button" }, [icon(paths), el("span", {}, [el("strong", { textContent: SOURCES[source] }), el("small", { textContent: description })])]);
+      button.onclick = () => finishWalkthrough(source);
+      return button;
+    }));
+    const later = el("button", { className: "link", textContent: "Set up later", type: "button" });
+    later.onclick = () => finishWalkthrough();
+    section.replaceChildren(el("div", { className: "tour-panel" }, [title,
+      el("p", { textContent: "Processing happens on your Mac. Originals stay until you choose to remove them." }), sources,
+      el("div", { className: "tour-controls" }, [later])]));
+    if (focusHeading) title.focus({ preventScroll: true });
+    return;
+  }
+  const [heading, description, nextLabel] = TOUR_STEPS[walkthrough.step];
+  const skip = el("button", { className: "link", textContent: "Skip tour", type: "button" });
+  skip.onclick = () => finishWalkthrough();
+  const back = el("button", { className: "link", textContent: "Back", type: "button", disabled: walkthrough.step === 0 });
+  back.onclick = () => { walkthrough.step--; renderWalkthrough(true); };
+  const next = el("button", { className: "primary", textContent: nextLabel, type: "button" });
+  next.onclick = () => {
+    if (walkthrough.step === 1 && walkthrough.picks.size === 0) walkthrough.picks.set(0, "compress");
+    walkthrough.step++; walkthrough.feedback = "";
+    renderWalkthrough(true);
+  };
+  const title = el("h2", { id: "tour-title", className: "tour-title", textContent: heading, tabIndex: -1 });
+  const feedback = el("p", { className: "tour-feedback", textContent: walkthrough.feedback });
+  feedback.setAttribute("aria-live", "polite");
+  const panel = el("div", { className: "tour-panel" }, [
+    el("div", { className: "tour-head" }, [el("span", { textContent: `Quick tour · ${walkthrough.step + 1} of 3` }), skip]),
+    title, el("p", { textContent: description }), el("div", { className: "tour-controls" }, [back, next]),
+  ]);
+  const grid = el("div", { className: "tour-grid" + (walkthrough.step === 0 ? " tour-highlight" : "") }, TOUR_FILES.map((file, index) => {
+    const pick = walkthrough.picks.get(index);
+    const actions = el("div", { className: "tour-actions" + (walkthrough.step === 1 && index === 0 ? " tour-highlight" : "") },
+      [["both", "Compress & delete"], ["delete", "Delete"], ["compress", "Compress"]].map(([choice, label]) => {
+        const button = el("button", { textContent: (pick === choice ? "✓ " : "") + label, type: "button" });
+        button.dataset.choice = choice;
+        button.dataset.tourPick = `${index}:${choice}`;
+        button.setAttribute("aria-pressed", String(pick === choice));
+        button.onclick = () => {
+          if (walkthrough.picks.get(index) === choice) walkthrough.picks.delete(index); else walkthrough.picks.set(index, choice);
+          walkthrough.feedback = choice === "compress" ? "Compress makes a smaller copy and keeps the original."
+            : choice === "both" ? "Compress & delete removes the original after the smaller copy is ready and you confirm deletion."
+            : "Delete removes this item without making a smaller copy.";
+          renderWalkthrough();
+          section.querySelector(`[data-tour-pick="${index}:${choice}"]`).focus({ preventScroll: true });
+        };
+        return button;
+      }));
+    return el("article", { className: "tour-card" + (pick ? " picked" : "") }, [
+      el("div", { className: "tour-thumb" }, [el("img", { src: `/tour/${file.thumb}.jpg`, alt: ["Rocky coast beside a forest", "Quiet sandy shoreline", "Clouds in the evening sky"][index] }), el("span", { className: "play" }), el("span", { className: "sample", textContent: "4K · Sample video" })]),
+      el("div", { className: "tour-info" }, [el("strong", { textContent: size(file.bytes) }), el("p", { textContent: file.name }), actions]),
+    ]);
+  }));
+  section.replaceChildren(panel, el("p", { className: "tour-subtitle", textContent: "Sample library · largest first · no personal files" }), grid);
+  if (walkthrough.step === 2) {
+    const picks = currentPicks(), shrinks = picks.toShrink.size + picks.toBoth.size, deletes = picks.toDelete.size;
+    const count = shrinks + deletes;
+    const run = el("button", { className: shrinks ? "primary" : "danger", textContent: actionLabel(picks), type: "button", disabled: count === 0 });
+    run.onclick = () => shrinks ? openShrink() : openTourDelete();
+    const clear = el("button", { textContent: "Clear", type: "button", disabled: count === 0 });
+    clear.onclick = () => { walkthrough.picks.clear(); walkthrough.feedback = ""; renderWalkthrough(); };
+    const labels = [];
+    if (shrinks) labels.push(`${shrinks} to compress${picks.toBoth.size ? `, ${picks.toBoth.size} then delete` : ""} · ${size([...picks.toShrink.values(), ...picks.toBoth.values()].reduce((sum, item) => sum + item.bytes, 0))}`);
+    if (deletes) labels.push(`${deletes} to delete · ${size([...picks.toDelete.values()].reduce((sum, item) => sum + item.bytes, 0))}`);
+    if (count) section.append(el("div", { className: "tour-review tour-highlight" }, [
+      el("strong", { textContent: labels.join(" · ") || "No items picked" }), run, clear,
+    ]));
+  }
+  if (walkthrough.queue.length) {
+    section.append(el("section", { className: "tour-queue", ariaLabel: "Example processing queue" }, [
+      el("strong", { textContent: "Queue" }), el("p", { className: "tour-subtitle", textContent: "Sample files · no files are changed" }),
+      ...walkthrough.queue.map((job) => el("div", { className: "job" }, [el("span", { className: "name", textContent: job.name }), el("span", { className: "status", textContent: job.status })])),
+    ]));
+  }
+  section.append(feedback);
+  if (focusHeading) title.focus({ preventScroll: true });
+}
+function resetTourQueue() {
+  for (const timer of walkthrough.queueTimers) clearTimeout(timer);
+  walkthrough.queueTimers = [];
+  walkthrough.queue = [];
+}
+function openTourDelete() {
+  const dialog = $("tourdelete");
+  dialog.classList.add("on");
+  $("tourdeleteconfirm").focus();
+}
+function startTourQueue() {
+  resetTourQueue();
+  walkthrough.queue = [...walkthrough.picks].map(([index, choice]) => ({
+    name: TOUR_FILES[index].name, choice: choice === "compress" && $("sdelete").checked ? "both" : choice, status: choice === "delete" ? "Example: deletion confirmed" : "Waiting",
+  }));
+  walkthrough.picks.clear();
+  walkthrough.feedback = "";
+  renderWalkthrough();
+  for (const [delay, phase] of [[500, "encoding"], [1500, "done"]]) {
+    walkthrough.queueTimers.push(setTimeout(() => {
+      if (!walkthrough.active) return;
+      for (const job of walkthrough.queue) {
+        job.status = job.choice === "delete" ? "Example: deleted"
+          : phase === "encoding" ? "Example: encoding…"
+          : job.choice === "both" ? "Example: copy saved · original waits for confirmation"
+          : "Example: copy saved · original kept";
+      }
+      renderWalkthrough();
+    }, delay));
+  }
+}
+$("tourdeletecancel").onclick = () => $("tourdelete").classList.remove("on");
+$("tourdeleteconfirm").onclick = () => { $("tourdelete").classList.remove("on"); startTourQueue(); };
+$("tourshow").onclick = startWalkthrough;
+
 // Keep "measured 5 minutes ago" honest while the page sits open.
 setInterval(renderFreshness, 60000);
-restoreView();
+async function startPage() {
+  // Reloading during an active queue must continue showing the real queue.
+  await pollJobs();
+  let seen = false;
+  try { seen = localStorage.getItem(WALKTHROUGH_KEY) === "done"; } catch (error) {}
+  if (!seen && !walkthroughBlocked()) startWalkthrough();
+  else restoreView();
+}
+startPage();
 </script>
 </body>
 </html>

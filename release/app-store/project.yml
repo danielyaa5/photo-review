@@ -15,6 +15,12 @@ targets:
         buildPhase: resources
       - path: ../../stats.html
         buildPhase: resources
+      - path: ../../assets/tour-coast.jpg
+        buildPhase: resources
+      - path: ../../assets/tour-shore.jpg
+        buildPhase: resources
+      - path: ../../assets/tour-sky.jpg
+        buildPhase: resources
       - path: ../../assets/icon.svg
         buildPhase: resources
       - path: ../../assets/AppIcon.icns

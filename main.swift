@@ -248,7 +248,12 @@ final class Library {
     #endif
     private static let cacheLifetime: TimeInterval = 24 * 60 * 60
 
+    private var authorizationRequested = false
     func start() {
+        lock.lock()
+        guard !authorizationRequested else { lock.unlock(); return }
+        authorizationRequested = true
+        lock.unlock()
         PHPhotoLibrary.requestAuthorization(for: .readWrite) { auth in
             switch auth {
             case .authorized:
@@ -2861,6 +2866,11 @@ final class Server {
             send(connection, 200, "text/html; charset=utf-8", Data(page.utf8), ["Cache-Control": "no-store"])
         case ("GET", "/icon.svg"):
             send(connection, 200, "image/svg+xml", icon, ["Cache-Control": "private, max-age=3600"])
+        case ("GET", "/tour/coast.jpg"), ("GET", "/tour/shore.jpg"), ("GET", "/tour/sky.jpg"):
+            let name = "tour-" + URL(fileURLWithPath: request.path).deletingPathExtension().lastPathComponent
+            let file = Bundle.main.url(forResource: name, withExtension: "jpg")
+            let data = file.flatMap { try? Data(contentsOf: $0) }
+            send(connection, data == nil ? 404 : 200, "image/jpeg", data ?? Data(), ["Cache-Control": "private, max-age=86400"])
         case ("GET", "/privacy"):
             let file = Bundle.main.url(forResource: "privacy", withExtension: "html")
             let data = file.flatMap { try? Data(contentsOf: $0) }
@@ -2881,6 +2891,14 @@ final class Server {
                 return event
             }
             sendJSON(connection, ["ready": library.isReady, "events": events])
+        case ("POST", "/api/photos/start"):
+            #if DEBUG
+            guard !CommandLine.arguments.contains("--folders-only") else {
+                return sendJSON(connection, ["ok": false, "error": "Photos access is disabled in this isolated folder test."])
+            }
+            #endif
+            library.start()
+            sendJSON(connection, ["ok": true])
         case ("GET", "/api/items"):
             // The Photos library, or with source=folder one added folder.
             let folder = request.query["source"] == "folder" ? request.query["folder"] : nil
@@ -3248,12 +3266,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             window.makeKeyAndOrderFront(nil)
             return
         }
-        #if DEBUG
-        // Isolated folder tests do not ask for or read a personal Photos library.
-        if !CommandLine.arguments.contains("--folders-only") { library.start() }
-        #else
-        library.start()
-        #endif
+        // The page starts Photos only after the walkthrough and when Apple Photos is selected.
         webView.load(URLRequest(url: home))
         scheduleUpdateChecks()
         // For the log: whether Photos may be controlled, found out only if Photos is open anyway, so nothing is asked.

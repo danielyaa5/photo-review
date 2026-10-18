@@ -18,6 +18,8 @@ Photo Review > Check for Updates Automatically turns off.
 
 ## What it does
 
+- **A quick first-use tour.** Practice the three actions with sample files before connecting your own library.
+  Skip it anytime, or reopen Quick tour later. Photos access is requested when you choose Apple Photos.
 - **Largest first.** Every photo and video with its real stored size, including edited versions and Live
   Photo video. Filter by videos, photos or RAW photos, or by year.
 - **Preview before deciding.** Thumbnails for everything, and in-page playback for videos, including ones
@@ -89,7 +91,7 @@ Photo Review > Check for Updates Automatically turns off.
 | ![A Google Drive folder, largest first, most files only in the cloud](docs/screenshot-drive.png) | ![The savings page](docs/screenshot-savings.png) |
 
 The library, compress and Google Drive screenshots use made-up data; the Savings one is the author's own history.
-The pictures in those three screenshots and in the demo are free placeholder photos from [Lorem Picsum](https://picsum.photos),
+The walkthrough thumbnails (Picsum IDs 13, 12 and 38), pictures in those three screenshots and in the demo are free placeholder photos from [Lorem Picsum](https://picsum.photos),
 which draws on [Unsplash](https://unsplash.com/license).
 
 ## How compressing works

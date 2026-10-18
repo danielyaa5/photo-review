@@ -296,7 +296,7 @@ function render(data) {
   ]);
 
   const sections = [hero, tiles];
-  if (!data.ready) sections.push(el("p", { className: "muted", textContent: "Still measuring the library, so whether originals are still present may be out of date for a minute." }));
+  if (!data.ready) sections.push(el("p", { className: "muted", textContent: "Original availability has not been checked yet. Connect Apple Photos and let its measurement finish to check which originals are still present. Your saved history is shown below." }));
 
   // One table for everything that happened. A shrink and the deletion of its original are one row,
   // so each row's Saved figure is counted once; deletions of anything else get rows of their own.

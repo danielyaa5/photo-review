@@ -1,0 +1,42 @@
+# Separate from the Developer ID release project. Older systems use user-selected size metadata.
+name: PhotoReviewStore
+options:
+  deploymentTarget:
+    macOS: "13.0"
+targets:
+  PhotoReviewStore:
+    type: application
+    platform: macOS
+    sources:
+      - path: PhotosSizeIndex.swift
+      - path: PhotosSizeAccess.swift
+      - path: ../../main.swift
+      - path: ../../index.html
+        buildPhase: resources
+      - path: ../../stats.html
+        buildPhase: resources
+      - path: ../../assets/icon.svg
+        buildPhase: resources
+      - path: ../../assets/AppIcon.icns
+        buildPhase: resources
+      - path: ../../docs/privacy.html
+        buildPhase: resources
+      - path: PrivacyInfo.xcprivacy
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_NAME: Photo Review Store Preview
+        EXECUTABLE_NAME: PhotoReview
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.danielyaa5.photo-review.store
+        INFOPLIST_FILE: Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: PhotoReview.entitlements
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_APP_SANDBOX: YES
+        SWIFT_VERSION: "5"
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) APP_STORE"
+        ARCHS: "$(ARCHS_STANDARD)"
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "DEBUG APP_STORE"

@@ -38,11 +38,62 @@ func dataFile(_ name: String, flag: String) -> URL {
     return folder.appendingPathComponent(name)
 }
 
+// MARK: - Distribution
+
+#if APP_STORE
+/// Folder grants come only from NSOpenPanel and are restored through app-scoped bookmarks.
+final class FolderAccess {
+    static let shared = FolderAccess()
+    private var urls: [URL] = []
+    private let defaults = UserDefaults.standard
+    private let key = "folderBookmarks"
+
+    private init() {
+        let bookmarks = defaults.dictionary(forKey: key) as? [String: Data] ?? [:]
+        for data in bookmarks.values {
+            var stale = false
+            guard let url = try? URL(resolvingBookmarkData: data, options: [.withSecurityScope],
+                relativeTo: nil, bookmarkDataIsStale: &stale), url.startAccessingSecurityScopedResource()
+            else { continue }
+            urls.append(url)
+            if stale, let fresh = try? url.bookmarkData(options: [.withSecurityScope],
+                includingResourceValuesForKeys: nil, relativeTo: nil) {
+                var saved = defaults.dictionary(forKey: key) as? [String: Data] ?? [:]
+                saved[url.path] = fresh
+                defaults.set(saved, forKey: key)
+            }
+        }
+    }
+
+    func remember(_ url: URL) throws {
+        let data = try url.bookmarkData(options: [.withSecurityScope], includingResourceValuesForKeys: nil, relativeTo: nil)
+        var saved = defaults.dictionary(forKey: key) as? [String: Data] ?? [:]
+        saved[url.path] = data
+        defaults.set(saved, forKey: key)
+        if !urls.contains(url), url.startAccessingSecurityScopedResource() { urls.append(url) }
+    }
+}
+#endif
+
+/// Prefer public PhotoKit sizes, then the explicitly selected read-only metadata index.
+func resourceBytes(_ resource: PHAssetResource, asset: PHAsset? = nil) -> Int64? {
+    #if APP_STORE
+    #if DEBUG
+    if CommandLine.arguments.contains("--database-sizes") { return PhotosSizeAccess.shared.bytes(resource, asset: asset) }
+    #endif
+    if #available(macOS 27, *), let bytes = resource.dataSize { return Int64(bytes) }
+    return PhotosSizeAccess.shared.bytes(resource, asset: asset)
+    #else
+    return (resource.value(forKey: "fileSize") as? NSNumber)?.int64Value
+    #endif
+}
+
 // MARK: - Updates
 
 /// Asks GitHub whether a newer release is out. The request is the same as opening the releases page in a
 /// browser, and nothing about the library is sent. The app checks when it opens and once a day while it stays open,
 /// unless that's switched off.
+#if !APP_STORE
 final class UpdateChecker {
     private let lock = NSLock()
     private var latest: (version: String, page: URL)?
@@ -103,6 +154,7 @@ final class UpdateChecker {
 }
 
 let updates = UpdateChecker()
+#endif
 
 // MARK: - Library
 
@@ -110,6 +162,7 @@ struct Item {
     let id: String
     let name: String
     let bytes: Int64
+    var sizeKnown: Bool = true
     let date: String
     let year: Int
     let isVideo: Bool
@@ -130,7 +183,7 @@ struct Item {
 
     var json: [String: Any] {
         [
-            "id": id, "name": name, "bytes": bytes, "date": date, "year": year, "video": isVideo, "raw": isRaw,
+            "id": id, "name": name, "bytes": bytes, "sizeKnown": sizeKnown, "date": date, "year": year, "video": isVideo, "raw": isRaw,
             "live": isLive, "jpeg": isJPEG, "motion": motionBytes, "w": width, "h": height, "dur": duration,
             "fav": favorite, "tags": tags,
         ]
@@ -138,7 +191,7 @@ struct Item {
 
     /// What a smaller copy can be made of: a video re-encoded, a RAW or JPEG photo saved as HEIC, or the
     /// still of a Live Photo without its video. Other photos are already compact.
-    var isCompressible: Bool { isVideo || isRaw || isLive || isJPEG }
+    var isCompressible: Bool { sizeKnown && (isVideo || isRaw || isLive || isJPEG) }
 
     /// Camera RAW files by name, for measurements cached before the app recorded RAW separately.
     static func looksRaw(_ name: String) -> Bool {
@@ -164,7 +217,7 @@ extension Item {
         let isLive = json["live"] as? Bool ?? (!isVideo && tags.contains("live"))
         let isJPEG = json["jpeg"] as? Bool ?? (!isVideo && !isRaw && ["jpg", "jpeg"].contains((name as NSString).pathExtension.lowercased()))
         self.init(
-            id: id, name: name, bytes: bytes, date: json["date"] as? String ?? "", year: json["year"] as? Int ?? 0,
+            id: id, name: name, bytes: bytes, sizeKnown: json["sizeKnown"] as? Bool ?? true, date: json["date"] as? String ?? "", year: json["year"] as? Int ?? 0,
             isVideo: isVideo, isRaw: isRaw, isLive: isLive, isJPEG: isJPEG,
             motionBytes: (json["motion"] as? NSNumber)?.int64Value ?? 0, width: json["w"] as? Int ?? 0, height: json["h"] as? Int ?? 0,
             duration: (json["dur"] as? NSNumber)?.doubleValue ?? 0, favorite: json["fav"] as? Bool ?? false,
@@ -188,13 +241,29 @@ final class Library {
 
     /// Measuring a big library takes about a minute, so the result is kept and reused for a day.
     private let cacheFile = dataFile("library.json", flag: "--cache")
+    #if APP_STORE
+    private static let cacheVersion = 2
+    #else
     private static let cacheVersion = 1
+    #endif
     private static let cacheLifetime: TimeInterval = 24 * 60 * 60
 
     func start() {
         PHPhotoLibrary.requestAuthorization(for: .readWrite) { auth in
             switch auth {
             case .authorized:
+                #if APP_STORE
+                var needsSizeLibrary = true
+                if #available(macOS 27, *) { needsSizeLibrary = false }
+                #if DEBUG
+                if CommandLine.arguments.contains("--database-sizes") { needsSizeLibrary = true }
+                #endif
+                if needsSizeLibrary, PhotosSizeAccess.shared.state["sizeLibrarySelected"] as? Bool != true {
+                    self.setStatus("needsLibrary")
+                    return
+                }
+                PhotosSizeAccess.shared.reload()
+                #endif
                 if self.loadCache() {
                     self.setStatus("ready")
                 } else {
@@ -209,6 +278,11 @@ final class Library {
         }
     }
 
+    var canChooseSizeLibrary: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return status == "ready" || status == "needsLibrary"
+    }
+
     private func setStatus(_ value: String) {
         lock.lock()
         status = value
@@ -221,17 +295,21 @@ final class Library {
     @discardableResult
     func update() -> Bool {
         lock.lock()
-        let idle = status == "ready"
+        let idle = status == "ready" || status == "needsLibrary"
+        let replacing = status == "ready"
         if idle {
-            status = "updating"
+            status = replacing ? "updating" : "scanning"
             scanned = 0
         }
         lock.unlock()
-        if idle { DispatchQueue.global(qos: .userInitiated).async { self.scan(replacing: true) } }
+        if idle { DispatchQueue.global(qos: .userInitiated).async { self.scan(replacing: replacing) } }
         return idle
     }
 
     private func scan(replacing: Bool) {
+        #if APP_STORE
+        PhotosSizeAccess.shared.reload()
+        #endif
         // Videos first: they hold most of the space, so the top of the list settles quickly.
         let groups = [PHAsset.fetchAssets(with: .video, options: nil), PHAsset.fetchAssets(with: .image, options: nil)]
         lock.lock()
@@ -324,8 +402,11 @@ final class Library {
         // Everything stored for the item counts: original, edited version, Live Photo video.
         var bytes: Int64 = 0
         var motionBytes: Int64 = 0
+        var sizeKnown = true
         for resource in resources {
-            let size = (resource.value(forKey: "fileSize") as? NSNumber)?.int64Value ?? 0
+            let known = resourceBytes(resource, asset: asset)
+            if known == nil { sizeKnown = false }
+            let size = known ?? 0
             bytes += size
             if resource.type == .pairedVideo || resource.type == .fullSizePairedVideo { motionBytes += size }
         }
@@ -357,14 +438,16 @@ final class Library {
             && (primary.flatMap { UTType($0.uniformTypeIdentifier)?.conforms(to: .jpeg) } ?? false)
             && !resources.contains { $0.type == .alternatePhoto }
         if asset.hasAdjustments { tags.append("edited") }
+        #if !APP_STORE
         // Not a public property, so only read it where it exists. A hint: it goes stale as Photos frees space.
         if let primary = primary, primary.responds(to: NSSelectorFromString("isLocallyAvailable")),
             primary.value(forKey: "locallyAvailable") as? Bool == true
         {
             tags.append("on this Mac")
         }
+        #endif
         return Item(
-            id: asset.localIdentifier, name: primary?.originalFilename ?? "(unnamed)", bytes: bytes,
+            id: asset.localIdentifier, name: primary?.originalFilename ?? "(unnamed)", bytes: bytes, sizeKnown: sizeKnown,
             date: date, year: year, isVideo: asset.mediaType == .video, isRaw: isRaw, isLive: isLive, isJPEG: isJPEG,
             motionBytes: motionBytes, width: asset.pixelWidth,
             height: asset.pixelHeight, duration: asset.duration, favorite: asset.isFavorite, tags: tags)
@@ -381,6 +464,9 @@ final class Library {
         // Left running for more than a day, the app refreshes itself the next time someone looks.
         if stale { update() }
 
+        #if APP_STORE
+        state.merge(PhotosSizeAccess.shared.state) { $1 }
+        #endif
         return state.merging(Library.listing(all, kind: kind, year: year, minBytes: minBytes, offset: offset, limit: limit)) { $1 }
     }
 
@@ -405,6 +491,7 @@ final class Library {
         var result: [String: Any] = [:]
         result["libraryBytes"] = libraryBytes
         result["libraryCount"] = all.count
+        result["unknownSizeCount"] = all.filter { !$0.sizeKnown }.count
         // The page only offers a RAW filter when there is something for it to show.
         result["rawCount"] = rawCount
         result["matchCount"] = matches.count
@@ -455,6 +542,9 @@ final class Library {
 
     /// Measures a newly created asset and adds it to the list.
     func add(_ asset: PHAsset) -> Item {
+        #if APP_STORE
+        PhotosSizeAccess.shared.reload()
+        #endif
         let item = Library.makeItem(asset, Calendar.current)
         lock.lock()
         noteChange(item.id, item)
@@ -470,6 +560,9 @@ final class Library {
         options.deliveryMode = .opportunistic
         options.resizeMode = .fast
         options.isNetworkAccessAllowed = true
+        #if DEBUG && APP_STORE
+        if CommandLine.arguments.contains("--database-sizes") { options.isNetworkAccessAllowed = false }
+        #endif
 
         // Photos may deliver a placeholder first and the real image later, much later, or never.
         // The grid shouldn't wait long for it; the viewer can.
@@ -626,6 +719,9 @@ final class Folders {
     }()
 
     init() {
+        #if APP_STORE
+        _ = FolderAccess.shared
+        #endif
         guard let data = try? Data(contentsOf: file), let list = (try? JSONSerialization.jsonObject(with: data)) as? [[String: String]]
         else { return }
         folders = list.compactMap { entry in
@@ -654,19 +750,36 @@ final class Folders {
         if let flag = arguments.firstIndex(of: "--drive-root"), flag + 1 < arguments.count {
             return [URL(fileURLWithPath: arguments[flag + 1], isDirectory: true).standardizedFileURL]
         }
+        #if APP_STORE
+        // Sandboxed apps discover availability, not account folders. Folder access is always chosen in a panel.
+        return NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.google.drivefs") == nil
+            ? [] : [URL(fileURLWithPath: "/Google Drive", isDirectory: true)]
+        #else
         let storage = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/CloudStorage", isDirectory: true)
         let names = (try? FileManager.default.contentsOfDirectory(atPath: storage.path)) ?? []
         return names.filter { $0.hasPrefix("GoogleDrive") }.sorted().map { storage.appendingPathComponent($0, isDirectory: true) }
+        #endif
     }
 
     static func inDrive(_ path: String) -> Bool {
         let path = normal(path)
+        #if APP_STORE
+        let parts = URL(fileURLWithPath: path).pathComponents
+        return parts.contains { $0.hasPrefix("GoogleDrive-") }
+        #else
         return driveRoots.contains { path == $0.path || path.hasPrefix($0.path + "/") }
+        #endif
     }
 
     /// How a folder's place is shown: "My Drive / Videos" in Drive, "~/Movies/Trips" in the home folder.
     static func place(_ path: String) -> String {
         let path = normal(path)
+        #if APP_STORE
+        let components = URL(fileURLWithPath: path).pathComponents
+        if let drive = components.firstIndex(where: { $0.hasPrefix("GoogleDrive-") }) {
+            return components.dropFirst(drive + 1).joined(separator: " / ")
+        }
+        #endif
         if let root = driveRoots.first(where: { path == $0.path || path.hasPrefix($0.path + "/") }) {
             return String(path.dropFirst(root.path.count)).split(separator: "/").joined(separator: " / ")
         }
@@ -1969,10 +2082,15 @@ final class Converter {
     static func fingerprint(_ asset: PHAsset) -> String {
         let edits = PHAssetResource.assetResources(for: asset)
             .filter { [.adjustmentData, .fullSizePhoto, .fullSizeVideo, .fullSizePairedVideo].contains($0.type) }
-            .map { "\($0.type.rawValue):\(($0.value(forKey: "fileSize") as? NSNumber)?.int64Value ?? 0)" }
+            .map { "\($0.type.rawValue):\(resourceBytes($0, asset: asset).map(String.init) ?? "unknown")" }
             .sorted()
         let place = asset.location.map { String(format: "%.6f,%.6f", $0.coordinate.latitude, $0.coordinate.longitude) } ?? "none"
-        return "\(asset.hasAdjustments) \(edits.joined(separator: ",")) \(asset.creationDate?.timeIntervalSince1970 ?? 0) \(place) \(asset.isFavorite)"
+        #if APP_STORE
+        let revision = "\(asset.modificationDate?.timeIntervalSince1970 ?? 0) "
+        #else
+        let revision = ""
+        #endif
+        return "\(revision)\(asset.hasAdjustments) \(edits.joined(separator: ",")) \(asset.creationDate?.timeIntervalSince1970 ?? 0) \(place) \(asset.isFavorite)"
     }
 
     /// Catches originals and smaller copies that were deleted somewhere other than this app, so their
@@ -2123,7 +2241,16 @@ final class Converter {
         let kept: [PHAssetResourceType] = [.photo, .video, .alternatePhoto, .pairedVideo, .audio, .fullSizePhoto, .fullSizeVideo, .fullSizePairedVideo]
         let resources = PHAssetResource.assetResources(for: asset).filter { kept.contains($0.type) }
         guard !resources.isEmpty else { throw ShrinkError.failed("Photos has no files for this item.") }
-        let sizes = resources.map { ($0.value(forKey: "fileSize") as? NSNumber)?.int64Value ?? 0 }
+        #if APP_STORE
+        PhotosSizeAccess.shared.reload()
+        #endif
+        let knownSizes = resources.map { resourceBytes($0, asset: asset) }
+        #if APP_STORE
+        guard knownSizes.allSatisfy({ $0 != nil }) else {
+            throw ShrinkError.failed("Some file sizes are unavailable. Choose your Photos library for size access and measure again before archiving this item.")
+        }
+        #endif
+        let sizes = knownSizes.map { $0 ?? 0 }
         let total = max(sizes.reduce(0, +), 1)
         if let free = freeSpace(at: folder), free < total + 200_000_000 {
             throw ShrinkError.failed(String(format: "Not enough space in that folder: it needs about %.1f GB and %.1f GB is free.", Double(total) / 1e9, Double(free) / 1e9))
@@ -2734,6 +2861,10 @@ final class Server {
             send(connection, 200, "text/html; charset=utf-8", Data(page.utf8), ["Cache-Control": "no-store"])
         case ("GET", "/icon.svg"):
             send(connection, 200, "image/svg+xml", icon, ["Cache-Control": "private, max-age=3600"])
+        case ("GET", "/privacy"):
+            let file = Bundle.main.url(forResource: "privacy", withExtension: "html")
+            let data = file.flatMap { try? Data(contentsOf: $0) }
+            send(connection, data == nil ? 404 : 200, "text/html; charset=utf-8", data ?? Data())
         case ("GET", "/stats"):
             send(connection, 200, "text/html; charset=utf-8", Data(statsPage.utf8), ["Cache-Control": "no-store"])
         case ("GET", "/api/stats"):
@@ -2891,7 +3022,41 @@ final class Server {
             folders.remove(path: path)
             sendJSON(connection, ["ok": true])
         case ("GET", "/api/version"):
+            #if APP_STORE
+            sendJSON(connection, ["available": false, "appStore": true])
+            #else
             sendJSON(connection, updates.json)
+            #endif
+        #if APP_STORE
+        case ("POST", "/api/size-library"):
+            guard library.canChooseSizeLibrary else { return sendJSON(connection, ["ok": false, "error": "Wait for the current measurement to finish."]) }
+            DispatchQueue.main.async {
+                let panel = NSOpenPanel()
+                panel.canChooseFiles = true; panel.canChooseDirectories = true
+                panel.treatsFilePackagesAsDirectories = true
+                panel.allowsMultipleSelection = false
+                panel.message = "Choose your System Photo Library to read file sizes without downloading photos or videos. Photo Review only reads its size records."
+                panel.prompt = "Read Sizes"
+                NSApp.activate(ignoringOtherApps: true)
+                guard panel.runModal() == .OK, let url = panel.url else {
+                    return self.sendJSON(connection, ["ok": false, "error": ""])
+                }
+                DispatchQueue.global(qos: .userInitiated).async {
+                    do {
+                        try PhotosSizeAccess.shared.select(url)
+                        self.library.update()
+                        self.sendJSON(connection, ["ok": true])
+                    } catch { self.sendJSON(connection, ["ok": false, "error": error.localizedDescription]) }
+                }
+            }
+        #if DEBUG
+        case ("POST", "/api/audit-sizes"):
+            DispatchQueue.global(qos: .utility).async {
+                PhotosSizeAccess.shared.reload()
+                self.sendJSON(connection, PhotosSizeAccess.shared.audit(limit: Int(request.query["limit"] ?? "") ?? 0, ids: (request.query["ids"] ?? "").split(separator: ",").map(String.init)))
+            }
+        #endif
+        #endif
         case ("POST", "/api/update"):
             // With a folder, that folder is looked through again; without, the Photos library is measured again.
             let payload = (try? JSONSerialization.jsonObject(with: request.body)) as? [String: Any] ?? [:]
@@ -3083,7 +3248,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             window.makeKeyAndOrderFront(nil)
             return
         }
+        #if DEBUG
+        // Isolated folder tests do not ask for or read a personal Photos library.
+        if !CommandLine.arguments.contains("--folders-only") { library.start() }
+        #else
         library.start()
+        #endif
         webView.load(URLRequest(url: home))
         scheduleUpdateChecks()
         // For the log: whether Photos may be controlled, found out only if Photos is open anyway, so nothing is asked.
@@ -3143,17 +3313,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             item.keyEquivalentModifierMask = modifiers
             return item
         }
+        #if !APP_STORE
         let automatic = item("Check for Updates Automatically", #selector(toggleAutomaticUpdates(_:)))
         automatic.state = UserDefaults.standard.bool(forKey: automaticUpdates) ? .on : .off
+        #endif
         let appMenu = NSMenu()
         for entry in [
             item("About Photo Review", #selector(NSApplication.orderFrontStandardAboutPanel(_:))),
-            item("Check for Updates…", #selector(checkForUpdates)), automatic, .separator(),
+            .separator(),
             item("Hide Photo Review", #selector(NSApplication.hide(_:)), "h"),
             item("Hide Others", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]),
             item("Show All", #selector(NSApplication.unhideAllApplications(_:))), .separator(),
             item("Quit Photo Review", #selector(NSApplication.terminate(_:)), "q"),
         ] { appMenu.addItem(entry) }
+        #if !APP_STORE
+        appMenu.insertItem(item("Check for Updates…", #selector(checkForUpdates)), at: 1)
+        appMenu.insertItem(automatic, at: 2)
+        #endif
         // The page's own text fields and selections need these to cut, copy and paste.
         let editMenu = NSMenu(title: "Edit")
         for entry in [
@@ -3174,6 +3350,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         ] { windowMenu.addItem(entry) }
         let helpMenu = NSMenu(title: "Help")
         helpMenu.addItem(item("Photo Review Website", #selector(openWebsite)))
+        #if APP_STORE
+        helpMenu.addItem(item("Privacy Policy", #selector(showPrivacy)))
+        #endif
         helpMenu.addItem(item("Report a Problem…", #selector(reportProblem)))
         NSApp.windowsMenu = windowMenu
         NSApp.helpMenu = helpMenu
@@ -3279,10 +3458,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             panel.prompt = "Add Folder"
             panel.message = "Choose a folder in Google Drive. Files that are only in the cloud are listed without being downloaded."
             remembered = "driveFolder"
+            #if !APP_STORE
             start = Folders.driveRoots.first.map { root in
                 let mine = root.appendingPathComponent("My Drive", isDirectory: true)
                 return FileManager.default.fileExists(atPath: mine.path) ? mine : root
             }
+            #endif
         default:
             panel.prompt = "Copy Here"
             panel.message = "Choose where to copy the originals, for example a folder on an external drive. Photo Review makes a folder for each year inside it. The files keep their camera details, but not the titles, captions, keywords or albums from Photos."
@@ -3292,6 +3473,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         if let start = start { panel.directoryURL = start }
         func chosen(_ response: NSApplication.ModalResponse) {
             guard response == .OK, let folder = panel.url else { return completion(nil) }
+            #if APP_STORE
+            do { try FolderAccess.shared.remember(folder) }
+            catch {
+                log("saving folder permission: \(error.localizedDescription)")
+                let alert = NSAlert()
+                alert.messageText = "Couldn't keep access to that folder"
+                alert.informativeText = error.localizedDescription
+                alert.runModal()
+                return completion(nil)
+            }
+            #endif
             UserDefaults.standard.set(folder.path, forKey: remembered)
             completion(folder)
         }
@@ -3306,6 +3498,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
     // MARK: Updates
 
+    #if APP_STORE
+    private func scheduleUpdateChecks() {}
+    @objc private func showPrivacy() {
+        webView.load(URLRequest(url: home.appendingPathComponent("privacy")))
+        window.makeKeyAndOrderFront(nil)
+    }
+    #else
     private func scheduleUpdateChecks() {
         updateTimer?.invalidate()
         guard UserDefaults.standard.bool(forKey: automaticUpdates) else { return }
@@ -3342,6 +3541,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         sender.state = on ? .on : .off
         scheduleUpdateChecks()
     }
+
+    #endif
 
     /// Quitting throws away a compression in progress, including a long download, so ask first.
     private func confirmQuit() -> Bool {

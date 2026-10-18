@@ -77,6 +77,8 @@
   #guide .step { display: flex; gap: 12px; align-items: flex-start; }
   #guide .ico { flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
   #guide .ico.delete { color: var(--danger); background: color-mix(in srgb, var(--danger) 13%, transparent); }
+  /* Compress & delete shows what it does: the Compress tile stacked over the Delete tile, in the same 36px column. */
+  #guide .icos { flex: none; display: flex; flex-direction: column; gap: 6px; }
   #guide .ico svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
   #guide b { display: block; font-size: 15px; line-height: 1.25; }
   #guide p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
@@ -245,7 +247,10 @@
   <section id="guide" aria-label="What the buttons do">
     <div class="steps">
       <div class="step">
-        <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.3-4.3L4 8.5M4 4v4.5h4.5M4 13a8 8 0 0 0 14.3 4.3L20 15.5M20 20v-4.5h-4.5"/></svg></span>
+        <span class="icos">
+          <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"/></svg></span>
+          <span class="ico delete"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l.9 12a1.6 1.6 0 0 0 1.6 1.5h6a1.6 1.6 0 0 0 1.6-1.5l.9-12M10 11v6M14 11v6"/></svg></span>
+        </span>
         <div><b>Compress &amp; delete</b><p>Makes the smaller copy, then deletes the original once the whole queue has finished.</p></div>
       </div>
       <div class="step">
@@ -276,6 +281,7 @@
 
 <main>
   <div id="notice" class="notice" hidden></div>
+  <div id="sizeaccess" class="notice" hidden><span id="sizeaccessmessage"></span> <button id="choosesizelibrary">Choose Photos Library…</button></div>
   <section id="jobs" hidden>
     <div class="head"><b>Queue</b><span class="counts" id="jcounts"></span><button id="jpick" hidden></button><button id="jclear">Clear finished</button></div>
     <p id="jnote" hidden></p>
@@ -391,7 +397,7 @@ const bin = (job) => job.drive ? "Google Drive's trash" : "the Trash";
 const SOURCES = { photos: "Apple Photos", drive: "Google Drive", local: "Local Folder" };
 // What a smaller copy can be made of: videos, RAW and JPEG photos, and Live Photos (their still alone).
 // Other photos are already compact and can only be deleted.
-const compressible = (item) => Boolean(item.video || item.raw || item.jpeg || item.live);
+const compressible = (item) => Boolean(item.sizeKnown !== false && (item.video || item.raw || item.jpeg || item.live));
 // "3 videos", "1 photo", or "4 items" for a mix.
 function countOf(items) {
   const videos = items.filter((item) => item.video).length;
@@ -441,7 +447,18 @@ async function post(path, body) {
 }
 
 // Fetches `limit` items from `offset`; replaces the list unless appending.
-const SETTLED = ["ready", "denied", "limited", "missing"];
+$("choosesizelibrary").onclick = async () => {
+  const button = $("choosesizelibrary");
+  button.disabled = true;
+  try {
+    const response = await fetch("/api/size-library", { method: "POST", headers: { "X-Token": TOKEN } });
+    const result = await response.json();
+    if (result.error) alert(result.error);
+    await load();
+  } catch { alert("Couldn't connect to Photo Review. Try again."); }
+  finally { button.disabled = !["ready", "needsLibrary"].includes(state.status); }
+};
+const SETTLED = ["ready", "denied", "limited", "missing", "needsLibrary"];
 let loadCount = 0;
 async function load({ offset = 0, limit = PAGE, append = false } = {}) {
   if (state.source !== "photos" && !state.folder) return renderFolders();
@@ -472,6 +489,13 @@ async function load({ offset = 0, limit = PAGE, append = false } = {}) {
 }
 
 function renderHeader(data) {
+  const sizeAccess = !state.folder && Object.hasOwn(data, "sizeLibrarySelected");
+  $("sizeaccess").hidden = !sizeAccess;
+  $("sizeaccessmessage").textContent = data.sizeLibraryError || (data.sizeLibrarySelected
+    ? "Library connected for size measurement."
+    : "Choose your Photos library to read missing sizes without downloading your photos or videos.");
+  $("choosesizelibrary").textContent = data.sizeLibrarySelected ? "Change library…" : "Choose Photos Library…";
+  $("choosesizelibrary").disabled = !["ready", "needsLibrary"].includes(data.status);
   const scanning = data.status === "scanning" || data.status === "starting";
   const updating = data.status === "updating";
   const folder = state.folder;
@@ -482,6 +506,8 @@ function renderHeader(data) {
     : scanning
     ? `Measuring your library… ${data.scanned.toLocaleString()} of ${data.total.toLocaleString()} items (${size(data.libraryBytes)} so far)`
     : `${size(data.libraryBytes)} in ${data.libraryCount.toLocaleString()} items, largest first. Sizes include edits and Live Photo video.`;
+  if (data.status === "needsLibrary") $("summary").textContent = "Connect your Photos library to measure and sort by size.";
+  if (data.unknownSizeCount) $("summary").textContent += ` ${data.unknownSizeCount.toLocaleString()} items have sizes Photos hasn't provided yet; totals include known sizes only.`;
   $("progress").hidden = !scanning && !updating;
   $("progress").firstElementChild.style.width = data.total ? (100 * data.scanned / data.total) + "%" : "0";
   // The measurement is kept for a day, so say how old it is and offer a fresh one.
@@ -563,7 +589,7 @@ function renderGrid() {
       const card = el("div", { className: "card" }, [
         thumb,
         el("div", { className: "info" }, [
-          el("div", { className: "size", textContent: size(item.bytes) }),
+          el("div", { className: "size", textContent: item.sizeKnown === false ? "Size unavailable" : size(item.bytes) }),
           el("div", { className: "meta", textContent: details, title: details }),
           el("div", { className: "meta", textContent: item.name, title: item.name }),
           // Videos and RAW photos can be compressed; other photos just get Delete.
@@ -742,7 +768,7 @@ function view(index, item = state.items[index]) {
 function renderViewerBar() {
   const item = state.viewing;
   const place = state.current >= 0 ? ` · ${state.current + 1} of ${state.match.toLocaleString()}` : "";
-  $("vsize").textContent = size(item.bytes);
+  $("vsize").textContent = item.sizeKnown === false ? "Size unavailable" : size(item.bytes);
   $("vmeta").textContent = ` · ${item.date || "No date"} · ${item.name}${item.video && item.dur > 0 ? " · " + duration(item.dur) : ""}${place}${item.copy ? ` · already compressed to ${size(item.copy.bytes)}, original not deleted` : ""}${item.shrunkFrom != null ? ` · a compressed copy${item.shrunkFrom ? ", was " + size(item.shrunkFrom) : ""}` : ""}`;
   const busy = isBusy(item.id);
   const shrunk = shrunkAlready(item);
@@ -1288,6 +1314,7 @@ async function checkVersion() {
   try { info = await (await fetch("/api/version")).json(); } catch (error) {}
   // Until the app's own check has an answer, look again every minute; after that, a few times a day.
   checkVersion.timer = setTimeout(checkVersion, info?.latest ? 6 * 60 * 60 * 1000 : 60 * 1000);
+  if (info?.appStore) { clearTimeout(checkVersion.timer); return; }
   if (!info) return;
   let dismissed = "";
   try { dismissed = localStorage.getItem("update-dismissed") || ""; } catch (error) {}

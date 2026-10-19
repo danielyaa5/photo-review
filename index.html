@@ -565,7 +565,7 @@ function renderHeader(data) {
     : "Choose your Photos library to read missing sizes without downloading your photos or videos.");
   $("choosesizelibrary").textContent = data.sizeLibrarySelected ? "Change library…" : "Choose Photos Library…";
   $("choosesizelibrary").disabled = !["ready", "needsLibrary"].includes(data.status);
-  const scanning = data.status === "scanning" || data.status === "starting";
+  const scanning = data.status === "scanning";
   const updating = data.status === "updating";
   const folder = state.folder;
   $("summary").textContent = folder
@@ -576,6 +576,7 @@ function renderHeader(data) {
     ? `Measuring your library… ${data.scanned.toLocaleString()} of ${data.total.toLocaleString()} items (${size(data.libraryBytes)} so far)`
     : `${size(data.libraryBytes)} in ${data.libraryCount.toLocaleString()} items, largest first. Sizes include edits and Live Photo video.`;
   if (data.status === "needsLibrary") $("summary").textContent = "Connect your Photos library to measure and sort by size.";
+  if (["starting", "denied", "limited"].includes(data.status)) $("summary").textContent = "";
   if (data.unknownSizeCount) $("summary").textContent += ` ${data.unknownSizeCount.toLocaleString()} items have sizes Photos hasn't provided yet; totals include known sizes only.`;
   $("progress").hidden = !scanning && !updating;
   $("progress").firstElementChild.style.width = data.total ? (100 * data.scanned / data.total) + "%" : "0";

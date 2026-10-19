@@ -249,32 +249,94 @@ final class Library {
     private static let cacheLifetime: TimeInterval = 24 * 60 * 60
 
     private var authorizationRequested = false
+
+    init() {
+        #if DEBUG
+        if CommandLine.arguments.contains("--folders-only") {
+            return
+        }
+        #endif
+        switch PHPhotoLibrary.authorizationStatus(for: .readWrite) {
+        case .authorized:
+            #if APP_STORE
+            var needsSizeLibrary = true
+            if #available(macOS 27, *) { needsSizeLibrary = false }
+            #if DEBUG
+            if CommandLine.arguments.contains("--database-sizes") { needsSizeLibrary = true }
+            #endif
+            if needsSizeLibrary, PhotosSizeAccess.shared.state["sizeLibrarySelected"] as? Bool != true {
+                status = "needsLibrary"
+                return
+            }
+            PhotosSizeAccess.shared.reload()
+            #endif
+            if loadCache() {
+                status = "ready"
+            } else {
+                status = "scanning"
+            }
+        case .limited:
+            status = "limited"
+        case .denied, .restricted:
+            status = "denied"
+        case .notDetermined:
+            status = "starting"
+        @unknown default:
+            status = "starting"
+        }
+    }
+
+    private func handleAuthorized() {
+        #if APP_STORE
+        var needsSizeLibrary = true
+        if #available(macOS 27, *) { needsSizeLibrary = false }
+        #if DEBUG
+        if CommandLine.arguments.contains("--database-sizes") { needsSizeLibrary = true }
+        #endif
+        if needsSizeLibrary, PhotosSizeAccess.shared.state["sizeLibrarySelected"] as? Bool != true {
+            self.setStatus("needsLibrary")
+            return
+        }
+        PhotosSizeAccess.shared.reload()
+        #endif
+        if self.loadCache() {
+            self.setStatus("ready")
+        } else {
+            self.setStatus("scanning")
+            DispatchQueue.global(qos: .userInitiated).async { self.scan(replacing: false) }
+        }
+    }
+
     func start() {
         lock.lock()
         guard !authorizationRequested else { lock.unlock(); return }
         authorizationRequested = true
+        let currentAuth = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        if currentAuth == .authorized {
+            let isReady = status == "ready"
+            let isScanning = status == "scanning"
+            lock.unlock()
+            if isReady { return }
+            if isScanning {
+                DispatchQueue.global(qos: .userInitiated).async { self.scan(replacing: false) }
+            } else {
+                handleAuthorized()
+            }
+            return
+        } else if currentAuth == .limited {
+            status = "limited"
+            lock.unlock()
+            return
+        } else if currentAuth == .denied || currentAuth == .restricted {
+            status = "denied"
+            lock.unlock()
+            return
+        }
         lock.unlock()
         PHPhotoLibrary.requestAuthorization(for: .readWrite) { auth in
             switch auth {
             case .authorized:
-                #if APP_STORE
-                var needsSizeLibrary = true
-                if #available(macOS 27, *) { needsSizeLibrary = false }
-                #if DEBUG
-                if CommandLine.arguments.contains("--database-sizes") { needsSizeLibrary = true }
-                #endif
-                if needsSizeLibrary, PhotosSizeAccess.shared.state["sizeLibrarySelected"] as? Bool != true {
-                    self.setStatus("needsLibrary")
-                    return
-                }
-                PhotosSizeAccess.shared.reload()
-                #endif
-                if self.loadCache() {
-                    self.setStatus("ready")
-                } else {
-                    self.setStatus("scanning")
-                    DispatchQueue.global(qos: .userInitiated).async { self.scan(replacing: false) }
-                }
+                self.handleAuthorized()
             case .limited:
                 self.setStatus("limited")
             default:

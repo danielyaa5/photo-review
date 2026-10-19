@@ -5,9 +5,9 @@
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleName</key>
-	<string>Photo Review</string>
+	<string>Cloud Media Shrinker</string>
 	<key>CFBundleDisplayName</key>
-	<string>Photo Review</string>
+	<string>Cloud Media Shrinker</string>
 	<key>CFBundleExecutable</key>
 	<string>PhotoReview</string>
 	<key>CFBundleIconFile</key>
@@ -17,15 +17,15 @@
 	<key>CFBundleShortVersionString</key>
 	<string>0.6.1</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>2</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Photo Review lists your largest photos and videos and deletes the ones you choose.</string>
+	<string>Cloud Media Shrinker lists your largest photos and videos and deletes the ones you choose.</string>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Photo Review opens the item you pick in the Photos app, and copies titles, captions and keywords to the smaller copies it makes.</string>
+	<string>Cloud Media Shrinker opens the item you pick in the Photos app, and copies titles, captions and keywords to the smaller copies it makes.</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.photography</string>
 	<key>ITSAppUsesNonExemptEncryption</key>

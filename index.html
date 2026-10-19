@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Photo Review</title>
+<title>Cloud Media Shrinker</title>
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
 <style>
   :root {
@@ -278,7 +278,7 @@
 <body data-view="photos">
 <div id="app">
 <nav id="sources" aria-label="Sources">
-  <div class="brand"><img src="/icon.svg" alt="">Photo Review</div>
+  <div class="brand"><img src="/icon.svg" alt="">Cloud Media Shrinker</div>
   <div class="group">SOURCES</div>
   <button data-source="photos" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="14" height="14" rx="2"/><path d="M7 3h12a2 2 0 0 1 2 2v12"/><circle cx="8.5" cy="10" r="1.5"/><path d="m17 16-4-4-7 7"/></svg>Apple Photos</button>
   <button data-source="drive" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 19H8a6 6 0 1 1 5.7-7.9A4.5 4.5 0 1 1 17.5 19Z"/></svg>Google Drive</button>
@@ -396,7 +396,7 @@
       <p id="srawmore" hidden>RAW copies are 10-bit HEIC at the chosen resolution and quality, developed with macOS's standard RAW settings. They aren't HDR, and editing them later is like editing any photo, not a RAW file. Their camera details, date and location carry over. A RAW photo with edits in Photos is skipped, because a copy made from the RAW file would lose them, and so is a RAW+JPEG pair.</p>
       <p id="shdr">HDR videos stay HDR, and HDR, ProRes and other 10-bit videos are always saved as HEVC so they keep their full colour depth.</p>
       <p id="sedits">Edits made in Photos are baked into the copies.</p>
-      <p id="sdetails">Titles, captions and keywords are copied to each new item; people tags can't be. For that, macOS asks once whether Photo Review may control Photos. Without it, originals picked for deletion are kept.</p>
+      <p id="sdetails">Titles, captions and keywords are copied to each new item; people tags can't be. For that, macOS asks once whether Cloud Media Shrinker may control Photos. Without it, originals picked for deletion are kept.</p>
     </details>
     <details id="sroom">
       <summary>Leave room on your Mac</summary>
@@ -497,11 +497,11 @@ async function post(path, body) {
     if (response.status === 403) {
       // The app hands out a new token each time it starts, so a page from an earlier run is refused.
       setTimeout(() => location.reload(), 1500);
-      return { ok: false, error: "Photo Review was restarted, so this page is out of date. Reloading…" };
+      return { ok: false, error: "Cloud Media Shrinker was restarted, so this page is out of date. Reloading…" };
     }
     return await response.json();
   } catch (error) {
-    return { ok: false, error: "Photo Review isn't responding. Check that the app is still open." };
+    return { ok: false, error: "Cloud Media Shrinker isn't responding. Check that the app is still open." };
   }
 }
 
@@ -514,7 +514,7 @@ $("choosesizelibrary").onclick = async () => {
     const result = await response.json();
     if (result.error) alert(result.error);
     await load();
-  } catch { alert("Couldn't connect to Photo Review. Try again."); }
+  } catch { alert("Couldn't connect to Cloud Media Shrinker. Try again."); }
   finally { button.disabled = !["ready", "needsLibrary"].includes(state.status); }
 };
 const SETTLED = ["ready", "denied", "limited", "missing", "needsLibrary"];
@@ -538,7 +538,7 @@ async function load({ offset = 0, limit = PAGE, append = false } = {}) {
   try {
     data = await (await fetch("/api/items?" + params)).json();
   } catch (error) {
-    $("summary").textContent = "Photo Review isn't responding. Open the Photo Review app, then reload this page.";
+    $("summary").textContent = "Cloud Media Shrinker isn't responding. Open the Cloud Media Shrinker app, then reload this page.";
     state.offline = true;
     return;
   }
@@ -597,9 +597,9 @@ function renderHeader(data) {
 
   const notice = $("notice");
   const messages = {
-    denied: "Photo Review doesn't have access to your Photos library. Turn it on in System Settings → Privacy & Security → Photos, then quit and reopen Photo Review.",
-    limited: "Photo Review only has access to selected photos. Give it full access in System Settings → Privacy & Security → Photos, then quit and reopen Photo Review.",
-    starting: "Waiting for permission. Look for a dialog from Photo Review asking to access your Photos library and choose Allow.",
+    denied: "Cloud Media Shrinker doesn't have access to your Photos library. Turn it on in System Settings → Privacy & Security → Photos, then quit and reopen Cloud Media Shrinker.",
+    limited: "Cloud Media Shrinker only has access to selected photos. Give it full access in System Settings → Privacy & Security → Photos, then quit and reopen Cloud Media Shrinker.",
+    starting: "Waiting for permission. Look for a dialog from Cloud Media Shrinker asking to access your Photos library and choose Allow.",
     missing: "This folder isn't there right now. If it's on an external drive, plug the drive in and open the folder again.",
   };
   notice.hidden = !messages[data.status];
@@ -769,7 +769,7 @@ new ResizeObserver(() => {
 
 function actionLabel(picks, busy = false) {
   const shrinks = picks.toShrink.size + picks.toBoth.size, deletes = picks.toDelete.size;
-  return busy ? "Confirm in the Photo Review dialog…"
+  return busy ? "Confirm in the Cloud Media Shrinker dialog…"
     : shrinks && deletes ? `Compress ${shrinks} and delete ${deletes}…`
     : shrinks ? `Compress ${countOf([...picks.toShrink.values(), ...picks.toBoth.values()])}…`
     : `Delete ${deletes} item${deletes === 1 ? "" : "s"}…`;
@@ -1083,7 +1083,7 @@ function renderEstimate() {
   $("salso").textContent = `The ${deletes === 1 ? "item" : items} you picked with Delete (${size([...picks.toDelete.values()].reduce((sum, item) => sum + item.bytes, 0))}) ${deletes === 1 ? "is" : "are"} ${gone} as soon as you press the button below.`;
   // When macOS will ask, which differs with what was picked.
   const atEnd = picked.some(doomed);
-  const asker = files ? "Photo Review asks" : "macOS asks", them = picked.filter(doomed).length + deletes === 1 ? "it" : "them";
+  const asker = files ? "Cloud Media Shrinker asks" : "macOS asks", them = picked.filter(doomed).length + deletes === 1 ? "it" : "them";
   const kept = drive ? `You can restore ${them} from Google Drive's trash for 30 days.` : files ? `You can put ${them} back from the Trash until it's emptied.` : "Deleted items stay in Recently Deleted for 30 days.";
   $("sconfirm").textContent = deletes && atEnd ? `${asker} you to confirm twice: when you press the button, for the items picked with Delete, and once the queue has finished, for the originals. ${kept}`
     : atEnd ? `${asker} you to confirm once, when the whole queue has finished, not after each one. ${kept}`
@@ -1139,7 +1139,7 @@ function jobStatus(job) {
         const copied = `Copied ${job.files} file${job.files === 1 ? "" : "s"} (${size(job.newBytes)}) to ${job.folder}.`;
         if (job.dryRun) return copied + " Test run: the original stays.";
         if (job.originalDeleted) return copied + " Original deleted.";
-        if (job.deletion === "pending") return copied + (state.queueLeft ? " The original will be deleted at the end of the queue." : " Waiting for you to confirm in the Photo Review dialog.");
+        if (job.deletion === "pending") return copied + (state.queueLeft ? " The original will be deleted at the end of the queue." : " Waiting for you to confirm in the Cloud Media Shrinker dialog.");
         if (job.deletion === "kept") return copied + " Original kept: " + (job.message || "the deletion wasn't confirmed.");
         return copied;
       }
@@ -1167,7 +1167,7 @@ function jobStatus(job) {
       if (job.copyDeleted) return saved + " The smaller copy has since been deleted.";
       if (job.originalDeleted) return saved + (job.file ? ` Original moved to ${bin(job)}.` : " Original deleted.");
       // macOS is asked once, for every original together, and only when nothing is left in the queue.
-      if (job.deletion === "pending") return saved + (state.queueLeft ? (job.file ? ` Its original goes to ${bin(job)} at the end of the queue.` : " Its original will be deleted at the end of the queue.") : " Waiting for you to confirm in the Photo Review dialog.");
+      if (job.deletion === "pending") return saved + (state.queueLeft ? (job.file ? ` Its original goes to ${bin(job)} at the end of the queue.` : " Its original will be deleted at the end of the queue.") : " Waiting for you to confirm in the Cloud Media Shrinker dialog.");
       if (job.deletion === "kept") return saved + " Original kept: " + (job.message || "the deletion wasn't confirmed.");
       return saved + " Check the new copy, then delete the original.";
     }
@@ -1184,7 +1184,7 @@ function renderJobs(jobs) {
   $("jnote").hidden = doomed === 0;
   $("jnote").textContent = left
     ? `${doomed === 1 ? "1 original is" : doomed + " originals are"} set to be deleted. ${jobs.some((job) => job.file) ? "You're asked" : "macOS asks you"} to confirm once, when the whole queue has finished (${left} still to go), not after each one.`
-    : `The queue has finished. You're asked to confirm deleting ${doomed === 1 ? "1 original" : doomed + " originals"}: look for the Photo Review dialog.`;
+    : `The queue has finished. You're asked to confirm deleting ${doomed === 1 ? "1 original" : doomed + " originals"}: look for the Cloud Media Shrinker dialog.`;
   const listed = new Set(jobs.map((job) => job.id));
   for (const [id, row] of jobRows) {
     if (!listed.has(id)) { row.node.remove(); jobRows.delete(id); }
@@ -1349,7 +1349,7 @@ async function renderBulk() {
   try {
     ({ items, room } = await bulkCandidates(Number($("bmin").value)));
   } catch (error) {
-    $("bcount").textContent = "Photo Review isn't responding.";
+    $("bcount").textContent = "Cloud Media Shrinker isn't responding.";
     return;
   }
   // A newer choice in the dialog has started its own count.
@@ -1415,7 +1415,7 @@ async function checkVersion() {
   try { dismissed = localStorage.getItem("update-dismissed") || ""; } catch (error) {}
   $("updatebar").hidden = !info.available || dismissed === info.latest;
   if ($("updatebar").hidden) return;
-  $("updatetext").textContent = `Photo Review ${info.latest} is available (you have ${info.current}).`;
+  $("updatetext").textContent = `Cloud Media Shrinker ${info.latest} is available (you have ${info.current}).`;
   if (info.url) $("updatelink").href = info.url;
   $("updatelater").onclick = () => {
     try { localStorage.setItem("update-dismissed", info.latest); } catch (error) {}
@@ -1427,7 +1427,7 @@ checkVersion();
 // Sources. Apple Photos is the library. Google Drive and Local Folder each list the folders added to them, and
 // opening one shows its photos and videos like the library. Which view was open is kept in this browser only.
 const PHOTOS_FOOT = "Pick what you want on each item, then press the button that appears at the bottom. macOS asks you to confirm before anything is deleted, and deleted items stay in Recently Deleted for 30 days.";
-const FILES_FOOT = "Pick what you want on each item, then press the button that appears at the bottom. Smaller copies go in a Compressed folder inside this one, and Photo Review asks before moving anything to the Trash.";
+const FILES_FOOT = "Pick what you want on each item, then press the button that appears at the bottom. Smaller copies go in a Compressed folder inside this one, and Cloud Media Shrinker asks before moving anything to the Trash.";
 const ICONS = {
   photo: '<rect x="3" y="5" width="14" height="14" rx="2"/><path d="M7 3h12a2 2 0 0 1 2 2v12"/><circle cx="8.5" cy="10" r="1.5"/><path d="m17 16-4-4-7 7"/>',
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
@@ -1489,7 +1489,7 @@ async function renderFolders() {
   try {
     data = await (await fetch("/api/folders?source=" + source)).json();
   } catch (error) {
-    $("folderlist").replaceChildren(el("p", { className: "hint", textContent: "Photo Review isn't responding. Check that the app is still open." }));
+    $("folderlist").replaceChildren(el("p", { className: "hint", textContent: "Cloud Media Shrinker isn't responding. Check that the app is still open." }));
     return;
   }
   if (mine !== folderCount || state.source !== source || state.folder) return;

@@ -1684,9 +1684,9 @@ func copyDetails(from original: String, to copy: String) -> String? {
     switch photosControl.answerForCopy() {
     case .allowed: break
     case .refused:
-        return "Titles, captions and keywords weren't copied: allow Photo Review to control Photos in System Settings > Privacy & Security > Automation."
+        return "Titles, captions and keywords weren't copied: allow Cloud Media Shrinker to control Photos in System Settings > Privacy & Security > Automation."
     case .undecided:
-        return "Titles, captions and keywords weren't copied: macOS is still waiting for an answer about letting Photo Review control Photos."
+        return "Titles, captions and keywords weren't copied: macOS is still waiting for an answer about letting Cloud Media Shrinker control Photos."
     case .unavailable:
         return "Titles, captions and keywords weren't copied: Photos couldn't be opened."
     }
@@ -1712,7 +1712,7 @@ func copyDetails(from original: String, to copy: String) -> String? {
         }
         log("copying details to \(copy) failed: \(errors)")
         if errors.contains("-1743") {
-            return "Titles, captions and keywords weren't copied: allow Photo Review to control Photos in System Settings > Privacy & Security > Automation."
+            return "Titles, captions and keywords weren't copied: allow Cloud Media Shrinker to control Photos in System Settings > Privacy & Security > Automation."
         }
         return "Titles, captions and keywords couldn't be copied (" + errors.trimmingCharacters(in: .whitespacesAndNewlines).suffix(120) + ")."
     }
@@ -3115,7 +3115,7 @@ final class Server {
                 panel.canChooseFiles = true; panel.canChooseDirectories = true
                 panel.treatsFilePackagesAsDirectories = true
                 panel.allowsMultipleSelection = false
-                panel.message = "Choose your System Photo Library to read file sizes without downloading photos or videos. Photo Review only reads its size records."
+                panel.message = "Choose your System Photo Library to read file sizes without downloading photos or videos. Cloud Media Shrinker only reads its size records."
                 panel.prompt = "Read Sizes"
                 NSApp.activate(ignoringOtherApps: true)
                 guard panel.runModal() == .OK, let url = panel.url else {
@@ -3286,17 +3286,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1280, height: 860),
             styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "Photo Review"
+        window.title = "Cloud Media Shrinker"
         window.minSize = NSSize(width: 720, height: 480)
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.contentView = webView
         window.tabbingMode = .disallowed
         // Comes back at the size and place it was left.
-        if !window.setFrameUsingName("Photo Review") { window.center() }
-        window.setFrameAutosaveName("Photo Review")
+        if !window.setFrameUsingName("Cloud Media Shrinker") { window.center() }
+        window.setFrameAutosaveName("Cloud Media Shrinker")
         titleWatch = webView.observe(\.title) { [weak self] view, _ in
-            self?.window.title = view.title.flatMap { $0.isEmpty ? nil : $0 } ?? "Photo Review"
+            self?.window.title = view.title.flatMap { $0.isEmpty ? nil : $0 } ?? "Cloud Media Shrinker"
         }
         webView.loadHTMLString(AppDelegate.notice("Starting…"), baseURL: nil)
         // Started with --no-open (after an update, say), the app waits in the Dock until it's clicked.
@@ -3322,8 +3322,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             server = nil
             webView.loadHTMLString(
                 AppDelegate.notice(
-                    "Photo Review couldn't start: \(problem)",
-                    detail: "Another copy may already be running. Quit this one, then open Photo Review again."),
+                    "Cloud Media Shrinker couldn't start: \(problem)",
+                    detail: "Another copy may already be running. Quit this one, then open Cloud Media Shrinker again."),
                 baseURL: nil)
             window.makeKeyAndOrderFront(nil)
             return
@@ -3394,12 +3394,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         #endif
         let appMenu = NSMenu()
         for entry in [
-            item("About Photo Review", #selector(NSApplication.orderFrontStandardAboutPanel(_:))),
+            item("About Cloud Media Shrinker", #selector(NSApplication.orderFrontStandardAboutPanel(_:))),
             .separator(),
-            item("Hide Photo Review", #selector(NSApplication.hide(_:)), "h"),
+            item("Hide Cloud Media Shrinker", #selector(NSApplication.hide(_:)), "h"),
             item("Hide Others", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]),
             item("Show All", #selector(NSApplication.unhideAllApplications(_:))), .separator(),
-            item("Quit Photo Review", #selector(NSApplication.terminate(_:)), "q"),
+            item("Quit Cloud Media Shrinker", #selector(NSApplication.terminate(_:)), "q"),
         ] { appMenu.addItem(entry) }
         #if !APP_STORE
         appMenu.insertItem(item("Check for Updates…", #selector(checkForUpdates)), at: 1)
@@ -3424,7 +3424,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             .separator(), item("Close", #selector(NSWindow.performClose(_:)), "w"),
         ] { windowMenu.addItem(entry) }
         let helpMenu = NSMenu(title: "Help")
-        helpMenu.addItem(item("Photo Review Website", #selector(openWebsite)))
+        helpMenu.addItem(item("Cloud Media Shrinker Website", #selector(openWebsite)))
         #if APP_STORE
         helpMenu.addItem(item("Privacy Policy", #selector(showPrivacy)))
         #endif
@@ -3433,7 +3433,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         NSApp.helpMenu = helpMenu
 
         let menu = NSMenu()
-        for (title, submenu) in [("Photo Review", appMenu), ("Edit", editMenu), ("View", viewMenu), ("Window", windowMenu), ("Help", helpMenu)] {
+        for (title, submenu) in [("Cloud Media Shrinker", appMenu), ("Edit", editMenu), ("View", viewMenu), ("Window", windowMenu), ("Help", helpMenu)] {
             let entry = NSMenuItem(title: title, action: nil, keyEquivalent: "")
             entry.submenu = submenu
             menu.addItem(entry)
@@ -3485,7 +3485,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         guard !parts.isEmpty else { return }
         var body = parts.joined(separator: ", ") + "."
         if confirming > 0 {
-            body += " Confirm deleting \(confirming == 1 ? "1 original" : "\(confirming) originals") in the Photo Review dialog."
+            body += " Confirm deleting \(confirming == 1 ? "1 original" : "\(confirming) originals") in the Cloud Media Shrinker dialog."
             NSApp.requestUserAttention(.criticalRequest)
         }
         let content = UNMutableNotificationContent()
@@ -3526,7 +3526,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         switch purpose {
         case "local":
             panel.prompt = "Add Folder"
-            panel.message = "Choose a folder on this Mac or an external drive. Photo Review lists its photos and videos, largest first; nothing in it changes until you choose."
+            panel.message = "Choose a folder on this Mac or an external drive. Cloud Media Shrinker lists its photos and videos, largest first; nothing in it changes until you choose."
             remembered = "localFolder"
             start = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Movies", isDirectory: true)
         case "drive":
@@ -3541,7 +3541,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             #endif
         default:
             panel.prompt = "Copy Here"
-            panel.message = "Choose where to copy the originals, for example a folder on an external drive. Photo Review makes a folder for each year inside it. The files keep their camera details, but not the titles, captions, keywords or albums from Photos."
+            panel.message = "Choose where to copy the originals, for example a folder on an external drive. Cloud Media Shrinker makes a folder for each year inside it. The files keep their camera details, but not the titles, captions, keywords or albums from Photos."
             remembered = "archiveFolder"
         }
         if let last = UserDefaults.standard.string(forKey: remembered) { start = URL(fileURLWithPath: last) }
@@ -3592,7 +3592,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             DispatchQueue.main.async {
                 let alert = NSAlert()
                 if let newer = newer {
-                    alert.messageText = "Photo Review \(newer.version) is available"
+                    alert.messageText = "Cloud Media Shrinker \(newer.version) is available"
                     alert.informativeText = "You have \(updates.current). Download the new version and drag it into Applications, replacing this one."
                     alert.addButton(withTitle: "Download")
                     alert.addButton(withTitle: "Later")
@@ -3602,7 +3602,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                     alert.informativeText = problem
                     alert.runModal()
                 } else {
-                    alert.messageText = "Photo Review is up to date"
+                    alert.messageText = "Cloud Media Shrinker is up to date"
                     alert.informativeText = "Version \(updates.current) is the newest."
                     alert.runModal()
                 }

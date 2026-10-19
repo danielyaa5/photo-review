@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Savings · Photo Review</title>
+<title>Savings · Cloud Media Shrinker</title>
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
 <style>
   :root {
@@ -103,21 +103,21 @@ async function openInPhotos(id) {
     if (response.status === 403) return location.reload();  // the app was restarted; this page is stale
     result = await response.json();
   } catch (error) {
-    result = { ok: false, error: "Photo Review isn't responding." };
+    result = { ok: false, error: "Cloud Media Shrinker isn't responding." };
   }
   if (!result.ok) toast((isFile(id) ? "Couldn't show it in Finder: " : "Couldn't open it in Photos: ") + result.error);
 }
 // Asks Photos to delete the original of a finished shrink. macOS shows its own confirmation first.
 async function deleteOriginal(event, button) {
   button.disabled = true;
-  button.textContent = "Confirm in the Photo Review dialog…";
+  button.textContent = "Confirm in the Cloud Media Shrinker dialog…";
   let result;
   try {
     const response = await fetch("/api/delete", { method: "POST", headers: { "X-Token": TOKEN, "Content-Type": "application/json" }, body: JSON.stringify({ ids: [event.assetId] }) });
     if (response.status === 403) return location.reload();  // the app was restarted; this page is stale
     result = await response.json();
   } catch (error) {
-    result = { ok: false, error: "Photo Review isn't responding." };
+    result = { ok: false, error: "Cloud Media Shrinker isn't responding." };
   }
   if (result.ok) {
     toast(`Moved the original of ${event.name} (${size(event.originalBytes)}) to ${!isFile(event.assetId) ? "Recently Deleted" : inDrive(event.assetId) ? "Google Drive's trash" : "the Trash"}.`);
@@ -395,7 +395,7 @@ async function refresh() {
       draw();
     }
   } catch (error) {
-    if (!last) $("content").replaceChildren(el("p", { className: "muted", textContent: "Photo Review isn't responding. Open the app, then reload this page." }));
+    if (!last) $("content").replaceChildren(el("p", { className: "muted", textContent: "Cloud Media Shrinker isn't responding. Open the app, then reload this page." }));
   }
   refresh.timer = setTimeout(refresh, 5000);
 }

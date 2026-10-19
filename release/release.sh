@@ -45,7 +45,7 @@ until xcodebuild -exportNotarizedApp -archivePath "$ARCHIVE" -exportPath "$BUILD
   sleep 20
 done
 
-APP="$BUILD/notarized/Photo Review.app"
+APP="$BUILD/notarized/Cloud Media Shrinker.app"
 spctl -a -vv "$APP"
 # The same file name every time, so the website's download button can always point at the latest release.
 ditto -c -k --keepParent "$APP" "$BUILD/PhotoReview.zip"

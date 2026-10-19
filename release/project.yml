@@ -25,7 +25,7 @@ targets:
         buildPhase: resources
     settings:
       base:
-        PRODUCT_NAME: Photo Review
+        PRODUCT_NAME: Cloud Media Shrinker
         EXECUTABLE_NAME: PhotoReview
         PRODUCT_BUNDLE_IDENTIFIER: io.github.danielyaa5.photo-review
         INFOPLIST_FILE: build/Info.plist

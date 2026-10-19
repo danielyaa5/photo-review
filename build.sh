@@ -1,9 +1,9 @@
 #!/bin/bash
-# Builds "Photo Review.app" next to this script.
+# Builds "Cloud Media Shrinker.app" next to this script.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-APP="Photo Review.app"
+APP="Cloud Media Shrinker.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp Info.plist "$APP/Contents/Info.plist"

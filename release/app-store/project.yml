@@ -31,7 +31,7 @@ targets:
         buildPhase: resources
     settings:
       base:
-        PRODUCT_NAME: Photo Review Store Preview
+        PRODUCT_NAME: Photo Review
         EXECUTABLE_NAME: PhotoReview
         PRODUCT_BUNDLE_IDENTIFIER: io.github.danielyaa5.photo-review.store
         INFOPLIST_FILE: Info.plist

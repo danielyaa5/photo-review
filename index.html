@@ -1122,6 +1122,9 @@ $("sstart").onclick = async () => {
     for (const item of picked) { state.toShrink.delete(item.id); state.toBoth.delete(item.id); }
     await pollJobs();
     renderGrid();
+    if (!$("jobs").hidden) {
+      $("jobs").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }
   // Anything picked with Delete goes now. Originals of the items being compressed wait for the queue.
   await deletePicked();
@@ -1722,6 +1725,8 @@ function startTourQueue() {
   walkthrough.picks.clear();
   walkthrough.feedback = "";
   renderWalkthrough();
+  const queueEl = $("walkthrough").querySelector(".tour-queue");
+  if (queueEl) queueEl.scrollIntoView({ behavior: "smooth", block: "start" });
   for (const [delay, phase] of [[500, "encoding"], [1500, "done"]]) {
     walkthrough.queueTimers.push(setTimeout(() => {
       if (!walkthrough.active) return;

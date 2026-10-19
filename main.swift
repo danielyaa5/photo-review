@@ -3287,6 +3287,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             contentRect: NSRect(x: 0, y: 0, width: 1280, height: 860),
             styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "Cloud Media Shrinker"
+        window.titleVisibility = .hidden
         window.minSize = NSSize(width: 720, height: 480)
         window.isReleasedWhenClosed = false
         window.delegate = self

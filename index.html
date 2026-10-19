@@ -15,7 +15,7 @@
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #151517; --card: #212124; --fg: #f1f1f2; --muted: #9b9ba2; --line: #34343a;
-      --accent: #63a6ff; --danger: #ff6a60; --shade: rgba(0, 0, 0, .7); --good: #1a7f37;
+      --accent: #63a6ff; --danger: #ff6a60; --shade: rgba(0, 0, 0, .7); --good: #3fb950;
       --accent-fill: #2563eb; --danger-fill: #d13b32;
     }
   }
@@ -84,16 +84,54 @@
   #guide p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
   #guide .foot { display: flex; gap: 16px; align-items: baseline; justify-content: space-between; margin-top: 13px; padding-top: 9px; border-top: 1px solid var(--line); font-size: 12px; }
   #guide .foot button { flex: none; font-size: 12px; }
-  .top .links { display: inline-flex; gap: 18px; align-items: baseline; }
-  .top .links button { font-size: 14px; }
+  .top .links { display: inline-flex; gap: 8px; align-items: center; }
+  .hdr-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 5px 11px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--fg);
+    text-decoration: none;
+    cursor: pointer;
+    line-height: 1.2;
+    transition: background .12s ease, border-color .12s ease, box-shadow .12s ease;
+    user-select: none;
+  }
+  .hdr-btn:hover {
+    background: color-mix(in srgb, var(--fg) 6%, var(--card));
+    border-color: color-mix(in srgb, var(--line) 70%, var(--accent));
+    text-decoration: none;
+    color: var(--fg);
+  }
+  .hdr-btn:active {
+    background: color-mix(in srgb, var(--fg) 10%, var(--card));
+  }
+  .hdr-btn svg {
+    width: 15px;
+    height: 15px;
+    flex: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+    opacity: 0.85;
+  }
   button.link { border: 0; background: none; padding: 0; color: var(--accent); text-decoration: underline; font-size: inherit; }
   #progress { height: 3px; background: var(--line); border-radius: 2px; margin-top: 10px; overflow: hidden; }
   #progress div { height: 100%; width: 0; background: var(--accent); transition: width .4s; }
-  .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 14px; }
-  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
-  .seg button { border: 0; border-radius: 0; background: var(--card); }
+  .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 24px; }
+  .seg { display: inline-flex; height: 32px; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; box-sizing: border-box; }
+  .seg button { border: 0; border-radius: 0; background: var(--card); height: 100%; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; line-height: 1; }
   .seg button + button { border-left: 1px solid var(--line); }
   .seg button[aria-pressed="true"] { background: var(--accent-fill); color: #fff; }
+  #year { height: 32px; padding: 0 8px; font-size: 13px; border: 1px solid var(--line); border-radius: 7px; background: var(--card); color: var(--fg); margin: 0; box-sizing: border-box; display: inline-flex; align-items: center; }
+  #bulkopen { height: 32px; padding: 0 12px; font-size: 13px; margin: 0; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; }
   #match { color: var(--muted); margin-left: auto; }
 
   main { padding: 4px 20px calc(var(--selection-height, 0px) + 28px); max-width: 1500px; margin: 0 auto; }
@@ -115,9 +153,33 @@
   .actions .pickboth { flex-basis: 100%; }
   .pickboth, button.mainline { font-weight: 600; color: var(--accent); border-color: var(--accent); }
   .pickdelete, button.redline { color: var(--danger); border-color: var(--danger); }
+  .pickkeep, button.greenline { color: var(--good); border-color: var(--good); }
   .card.shrinking .pickshrink { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; }
   .card.both .pickboth { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; }
   .card.deleting .pickdelete { background: var(--danger-fill); border-color: var(--danger-fill); color: #fff; }
+  .card.kept .pickkeep, button.good { background: var(--good); border-color: var(--good); color: #fff; font-weight: 600; }
+  .filter-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 32px;
+    padding: 0 10px;
+    font-size: 13px;
+    color: var(--fg);
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    cursor: pointer;
+    user-select: none;
+    margin: 0;
+    box-sizing: border-box;
+    transition: background .12s, border-color .12s;
+  }
+  .filter-toggle:hover {
+    background: color-mix(in srgb, var(--fg) 5%, var(--card));
+    border-color: color-mix(in srgb, var(--line) 70%, var(--accent));
+  }
+  .filter-toggle input { cursor: pointer; margin: 0; width: 14px; height: 14px; accent-color: var(--accent-fill); }
   .card .reveal { display: block; width: 100%; margin-top: 6px; border: 0; background: none; padding: 2px 0; color: var(--accent); font-size: 12px; text-align: left; }
   /* What is happening to this video in the shrink queue, shown on its picture. */
   .work { position: absolute; left: 0; right: 0; bottom: 0; background: var(--shade); color: #fff; font-size: 12px; padding: 6px 8px 7px; }
@@ -189,6 +251,48 @@
   #updatebar { max-width: none; margin: 10px 0 0; padding: 10px 14px; }
   #updatebar a { color: var(--accent); }
 
+  /* Mode styles: Simple vs Advanced */
+  body[data-mode="simple"] .pickshrink { display: none !important; }
+  body[data-mode="simple"] #spresets { display: grid; }
+  body[data-mode="simple"] #sadvancedcontrols { display: none; }
+  body[data-mode="advanced"] #spresets { display: none; }
+  body[data-mode="advanced"] #sadvancedcontrols { display: block; }
+  .preset-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 10px 0 14px; }
+  .preset-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    padding: 10px 12px;
+    background: var(--bg);
+    border: 2px solid var(--line);
+    border-radius: 9px;
+    cursor: pointer;
+    font-family: inherit;
+    color: var(--fg);
+    transition: border-color .15s, background .15s;
+  }
+  .preset-card:hover { border-color: var(--accent); }
+  .preset-card.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--card)); }
+  .preset-badge {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin-bottom: 5px;
+  }
+  .preset-card strong { font-size: 13px; font-weight: 650; margin-bottom: 3px; display: block; }
+  .preset-sub { font-size: 11px; color: var(--muted); margin-bottom: 6px; display: block; }
+  .preset-save { font-size: 11px; font-weight: 600; color: var(--good); margin-top: auto; display: block; }
+  @media (max-width: 580px) {
+    .preset-cards { grid-template-columns: 1fr; }
+  }
+
   #viewer { position: fixed; inset: 0; background: rgba(0, 0, 0, .92); display: none; flex-direction: column; z-index: 10; }
   #viewer.on { display: flex; }
   #stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 16px; }
@@ -240,10 +344,22 @@
   .tour-title { margin: 0 0 8px; font-size: 20px; }
   .tour-title:focus { outline: none; }
   .tour-panel p { color: var(--muted); margin: 0 0 16px; max-width: 680px; }
+  .tour-desc { margin: 0 0 16px; max-width: 680px; }
+  .tour-desc p { color: var(--muted); margin: 0 0 8px; }
+  .tour-point { color: var(--fg); margin: 4px 0 4px 6px; font-size: 13.5px; line-height: 1.45; }
+  .tour-point b { color: var(--fg); font-weight: 600; }
   .tour-controls { margin-top: 16px; }
-  .tour-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 14px; }
+  .tour-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+    gap: 14px;
+    padding: 16px;
+    border-radius: 18px;
+    border: 2px solid transparent;
+    box-sizing: border-box;
+    transition: opacity .25s ease, filter .25s ease, border-color .25s ease, box-shadow .25s ease, background-color .25s ease;
+  }
   .tour-card { min-width: 0; background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-  .tour-card.picked { box-shadow: 0 0 0 2px var(--accent); }
   .tour-thumb { position: relative; height: 135px; background: color-mix(in srgb, var(--accent) 10%, var(--bg)); }
   .tour-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
   .tour-thumb .sample { background: var(--shade); color: white; padding: 2px 6px; border-radius: 4px; }
@@ -255,18 +371,95 @@
   .tour-info p { margin: 3px 0 12px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
   .tour-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
   .tour-actions button { padding: 7px 6px; min-width: 0; }
-  .tour-actions button:first-child { grid-column: 1 / -1; color: var(--accent); border-color: var(--accent); }
+  .tour-actions button:first-child { grid-column: 1 / -1; color: var(--accent); border-color: var(--accent); font-weight: 600; }
   .tour-actions button[data-choice="delete"] { color: var(--danger); border-color: var(--danger); }
+  .tour-actions button[data-choice="keep"] { color: var(--good); border-color: var(--good); }
   .tour-actions button[aria-pressed="true"] { background: var(--accent-fill); color: white; border-color: var(--accent-fill); }
+  .tour-actions button[data-choice="delete"][aria-pressed="true"] { background: var(--danger-fill); border-color: var(--danger-fill); }
+  .tour-actions button[data-choice="keep"][aria-pressed="true"] { background: var(--good); border-color: var(--good); }
   .tour-review { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-top: 22px; }
   .tour-review strong { margin-right: auto; }
   .tour-highlight { outline: 2px solid var(--accent); outline-offset: 5px; border-radius: 10px; }
-  .tour-feedback { min-height: 20px; color: var(--muted); margin: 16px 0 0; font-size: 13px; }
-  .tour-sources { display: grid; gap: 10px; max-width: 570px; margin-top: 22px; }
-  .tour-source { display: flex; align-items: center; gap: 12px; padding: 14px; text-align: left; }
-  .tour-source svg { width: 24px; height: 24px; color: var(--accent); flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-  .tour-source strong { display: block; }
-  .tour-source small { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
+  .tour-feedback { min-height: 20px; color: var(--accent); margin: 6px 0 10px; font-size: 13px; font-weight: 500; }
+  .tour-complete-msg { margin-top: 14px; padding: 14px 16px; background: color-mix(in srgb, var(--good) 12%, var(--card)); border: 1px solid var(--good); border-radius: 8px; }
+  .tour-complete-msg strong { color: var(--good); display: block; margin-bottom: 4px; font-size: 14px; }
+  .tour-sources { display: grid; gap: 12px; max-width: 600px; margin-top: 22px; }
+  .tour-source { display: flex; align-items: center; gap: 16px; padding: 14px 18px; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; transition: background .15s, border-color .15s; }
+  .tour-source:hover { background: color-mix(in srgb, var(--fg) 5%, var(--card)); border-color: color-mix(in srgb, var(--line) 70%, var(--accent)); }
+  .tour-source svg { width: 28px; height: 28px; color: var(--accent); flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; display: block; }
+  .tour-source span { display: flex; flex-direction: column; gap: 3px; }
+  .tour-source strong { font-size: 15px; font-weight: 600; color: var(--fg); }
+  .tour-source small { font-size: 13px; color: var(--muted); line-height: 1.35; }
+  .tour-pickmany-box { margin: 12px 0 14px; padding: 12px 14px; background: color-mix(in srgb, var(--accent) 8%, var(--card)); border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); border-radius: 8px; }
+  .tour-pickmany-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 13px; font-weight: 500; }
+  .tour-pickmany-row select { padding: 5px 8px; font-size: 13px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--fg); }
+  .tour-pickmany-row button { padding: 6px 12px; font-size: 13px; }
+  /* Walkthrough dimming & spotlighting */
+  body.walkthrough #sources {
+    opacity: 0.22;
+    filter: brightness(0.65) grayscale(50%);
+    pointer-events: none;
+    transition: opacity .3s ease, filter .3s ease;
+  }
+  body.walkthrough.tour-final #sources {
+    opacity: 1;
+    filter: none;
+    pointer-events: auto;
+  }
+  .tour-card {
+    transition: opacity .25s ease, filter .25s ease, box-shadow .25s ease, transform .25s ease;
+  }
+  .tour-dimmed {
+    opacity: 0.2 !important;
+    filter: brightness(0.6) grayscale(50%) !important;
+    pointer-events: none !important;
+  }
+  .tour-grid {
+    transition: opacity .25s ease, filter .25s ease;
+  }
+  .tour-grid.tour-dimmed {
+    opacity: 0.22 !important;
+    filter: brightness(0.65) grayscale(40%) !important;
+    pointer-events: none !important;
+  }
+  .tour-grid.tour-spotlight {
+    position: relative;
+    z-index: 4;
+    border-color: var(--accent-fill) !important;
+    background: color-mix(in srgb, var(--accent) 3%, transparent);
+    box-shadow: 0 0 0 3px var(--accent-fill), 0 0 24px color-mix(in srgb, var(--accent-fill) 25%, transparent), 0 8px 28px rgba(0, 0, 0, 0.14) !important;
+  }
+  .tour-spotlight {
+    position: relative;
+    z-index: 4;
+    border-color: var(--accent-fill) !important;
+    box-shadow: 0 0 0 3px var(--accent-fill), 0 0 22px color-mix(in srgb, var(--accent-fill) 35%, transparent), 0 8px 24px rgba(0, 0, 0, 0.18) !important;
+    transition: all .25s ease;
+  }
+  .tour-actions.tour-spotlight {
+    position: relative;
+    z-index: 5;
+    padding: 8px;
+    margin: 6px -4px -4px;
+    background: color-mix(in srgb, var(--accent) 8%, var(--card));
+    border: 2px solid var(--accent-fill);
+    border-radius: 9px;
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-fill) 25%, transparent), 0 6px 20px rgba(0, 0, 0, 0.16) !important;
+  }
+  .tour-pickmany-box.tour-spotlight {
+    position: relative;
+    z-index: 4;
+    border-color: var(--accent-fill) !important;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-fill) 28%, transparent), 0 6px 18px rgba(0, 0, 0, 0.12) !important;
+  }
+  .tour-step-0 .tour-card .actions {
+    opacity: 0.2;
+    filter: brightness(0.65);
+    pointer-events: none;
+  }
+  .tour-step-0 .tour-info strong {
+    color: var(--accent);
+  }
   @media (max-width: 760px) {
     .tour-panel { padding: 16px; }
     .tour-review button { flex: 1 1 150px; }
@@ -287,12 +480,12 @@
 <div id="content">
 <header>
   <button id="folderback" class="link" hidden>‹ All folders</button>
-  <div class="top"><h1 id="title">Apple Photos</h1><span class="links"><button id="tourshow" class="link">Quick tour</button><button id="guideshow" class="link" hidden>What the buttons do</button><a href="/stats">Savings and history</a></span></div>
+  <div class="top"><h1 id="title">Apple Photos</h1><span class="links"><button id="tourshow" class="hdr-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/><path d="M19 3v4M21 5h-4"/></svg>Quick tour</button><button id="guideshow" class="hdr-btn" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>What the buttons do</button><a href="/stats" class="hdr-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>Savings and history</a></span></div>
   <div id="summary">Loading…</div>
   <div id="fresh" hidden><span id="freshtext"></span> <button id="update" class="link">Measure again</button></div>
   <div id="updatebar" class="notice" hidden><span id="updatetext"></span> <a id="updatelink" href="https://github.com/danielyaa5/photo-review/releases/latest" target="_blank" rel="noopener noreferrer">Download it</a> · <button id="updatelater" class="link">Not now</button></div>
   <section id="guide" aria-label="What the buttons do">
-    <div class="steps">
+    <div class="steps" id="guidesteps">
       <div class="step">
         <span class="icos">
           <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"/></svg></span>
@@ -313,13 +506,20 @@
   </section>
   <div id="progress"><div></div></div>
   <div class="filters">
+    <div class="seg" id="modes" aria-label="Mode">
+      <button data-mode="simple" aria-pressed="true" title="Simple mode: 1-click presets and clean triage">Simple</button>
+      <button data-mode="advanced" aria-pressed="false" title="Advanced mode: Full transcode parameters &amp; granular controls">Advanced</button>
+    </div>
     <div class="seg" id="kinds">
       <button data-kind="all" aria-pressed="true">All</button>
       <button data-kind="video" aria-pressed="false">Videos</button>
       <button data-kind="photo" aria-pressed="false">Photos</button>
       <button data-kind="raw" aria-pressed="false" hidden>RAW</button>
+      <button data-kind="kept" aria-pressed="false">Kept</button>
     </div>
     <select id="year" aria-label="Year"><option value="">All years</option></select>
+    <label class="filter-toggle" id="rhidelabel" title="Hide items that have been marked kept"><input type="checkbox" id="rhide" checked> Hide kept</label>
+    <label class="filter-toggle" id="shidelabel" title="Hide items that have already been shrunk"><input type="checkbox" id="shide" checked> Hide already shrunk</label>
     <span id="match"></span>
     <button id="bulkopen">Pick many…</button>
   </div>
@@ -373,15 +573,37 @@
       <p id="salso" hidden></p>
       <p id="sconfirm"></p>
     </div>
-    <label>Resolution <select id="sres">
-      <option value="keep">Keep original</option><option value="2160">4K at most</option>
-      <option value="1080">1080p at most</option><option value="720">720p at most</option></select></label>
-    <label id="sfpsrow">Frame rate <select id="sfps">
-      <option value="keep">Keep original</option><option value="30">30 fps at most</option><option value="24">24 fps at most</option></select></label>
-    <label id="scodecrow">Format <select id="scodec">
-      <option value="hevc">HEVC (smallest)</option><option value="h264">H.264 (plays everywhere)</option></select></label>
-    <label>Quality <select id="squality">
-      <option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
+    <div id="spresets" class="preset-cards" role="radiogroup" aria-label="Presets">
+      <button type="button" class="preset-card active" data-preset="balanced" role="radio" aria-checked="true">
+        <span class="preset-badge">Recommended</span>
+        <strong>Balanced</strong>
+        <span class="preset-sub">1080p · 30 fps · High · HEVC</span>
+        <span class="preset-save">Saves ~70% space</span>
+      </button>
+      <button type="button" class="preset-card" data-preset="max" role="radio" aria-checked="false">
+        <span class="preset-badge" style="visibility:hidden">Preset</span>
+        <strong>Maximum Savings</strong>
+        <span class="preset-sub">720p · 30 fps · Medium · HEVC</span>
+        <span class="preset-save">Saves ~85% space</span>
+      </button>
+      <button type="button" class="preset-card" data-preset="keep4k" role="radio" aria-checked="false">
+        <span class="preset-badge" style="visibility:hidden">Preset</span>
+        <strong>Preserve 4K</strong>
+        <span class="preset-sub">Original Res &amp; fps · High · HEVC</span>
+        <span class="preset-save">Saves ~45% space</span>
+      </button>
+    </div>
+    <div id="sadvancedcontrols">
+      <label>Resolution <select id="sres">
+        <option value="keep">Keep original</option><option value="2160">4K at most</option>
+        <option value="1080">1080p at most</option><option value="720">720p at most</option></select></label>
+      <label id="sfpsrow">Frame rate <select id="sfps">
+        <option value="keep">Keep original</option><option value="30">30 fps at most</option><option value="24">24 fps at most</option></select></label>
+      <label id="scodecrow">Format <select id="scodec">
+        <option value="hevc">HEVC (smallest)</option><option value="h264">H.264 (plays everywhere)</option></select></label>
+      <label>Quality <select id="squality">
+        <option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
+    </div>
     <div id="spreview"></div>
     <p id="sestimate"></p>
     <!-- What a copy gives up, a line each, for the kinds of item picked. The rest is folded away below. -->
@@ -428,11 +650,12 @@
     <button id="vprev">← Previous</button>
     <button id="vnext">Next →</button>
     <button id="vreveal">Open in Photos</button>
+    <button id="vkeep"></button>
     <button id="vboth" title="Compress, then delete the original"></button>
     <button id="vdelete"></button>
     <button id="vshrink"></button>
     <button id="vclose">Close</button>
-    <div class="keys">← → to move · B to compress &amp; delete · X to delete · C to compress · Esc to close</div>
+    <div class="keys">← → to move · K to keep · B to compress &amp; delete · X to delete · C to compress · Esc to close</div>
   </div>
 </div>
 
@@ -444,7 +667,14 @@ const PAGE = 60;
 // "Shrink" in the code is the "Compress" button.
 // `work` is the latest shrink job for each video (asset id -> job).
 // `viewing` is the item open in the viewer, `current` its index in the list or -1.
-const state = { source: "photos", folder: null, items: [], toShrink: new Map(), toBoth: new Map(), toDelete: new Map(), work: new Map(), kind: "all", year: "", match: 0, status: "starting", current: -1, viewing: null, busy: false, jobs: new Map(), gone: new Set(), downloading: false, queueLeft: 0, offline: false, measuredAt: null, updating: "" };
+const savedHideReviewed = localStorage.getItem("hideReviewed");
+const initialHideReviewed = savedHideReviewed === null ? true : savedHideReviewed === "true";
+const savedHideShrunk = localStorage.getItem("hideShrunk");
+const initialHideShrunk = savedHideShrunk === null ? true : savedHideShrunk === "true";
+const savedMode = localStorage.getItem("mode");
+const initialMode = savedMode === "advanced" ? "advanced" : "simple";
+const savedPreset = localStorage.getItem("preset") || "balanced";
+const state = { source: "photos", folder: null, items: [], toShrink: new Map(), toBoth: new Map(), toDelete: new Map(), work: new Map(), kind: "all", year: "", hideReviewed: initialHideReviewed, hideShrunk: initialHideShrunk, mode: initialMode, preset: savedPreset, match: 0, status: "starting", current: -1, viewing: null, busy: false, jobs: new Map(), gone: new Set(), downloading: false, queueLeft: 0, offline: false, measuredAt: null, updating: "" };
 const $ = (id) => document.getElementById(id);
 // Files in added folders have ids starting "file:"; everything else is in Photos.
 const isFileItem = (item) => Boolean(item && item.id.startsWith("file:"));
@@ -532,7 +762,7 @@ async function load({ offset = 0, limit = PAGE, append = false } = {}) {
   try { if (state.source === "photos") await startPhotos(); }
   catch (error) { $("summary").textContent = error.message; state.offline = true; return; }
   const mine = ++loadCount;
-  const params = new URLSearchParams({ offset, limit, kind: state.kind, year: state.year });
+  const params = new URLSearchParams({ offset, limit, kind: state.kind, year: state.year, hideReviewed: state.hideReviewed ? "1" : "0", hideShrunk: state.hideShrunk ? "1" : "0" });
   if (state.folder) { params.set("source", "folder"); params.set("folder", state.folder.path); }
   let data;
   try {
@@ -557,7 +787,23 @@ async function load({ offset = 0, limit = PAGE, append = false } = {}) {
   renderGrid();
 }
 
+function updateKeptTabLabel() {
+  const keptBtn = document.querySelector('#kinds [data-kind="kept"]');
+  if (keptBtn) {
+    const count = state.keptCount || 0;
+    keptBtn.textContent = count > 0 ? `Kept (${count.toLocaleString()})` : "Kept";
+  }
+}
+
 function renderHeader(data) {
+  $("rhide").checked = Boolean(state.hideReviewed);
+  $("shide").checked = Boolean(state.hideShrunk);
+  const isKept = state.kind === "kept";
+  $("rhidelabel").hidden = isKept;
+  $("shidelabel").hidden = isKept;
+  $("bulkopen").hidden = isKept;
+  if (data.keptCount !== undefined) state.keptCount = data.keptCount;
+  updateKeptTabLabel();
   const sizeAccess = !state.folder && Object.hasOwn(data, "sizeLibrarySelected");
   $("sizeaccess").hidden = !sizeAccess;
   $("sizeaccessmessage").textContent = data.sizeLibraryError || (data.sizeLibrarySelected
@@ -584,7 +830,15 @@ function renderHeader(data) {
   state.measuredAt = data.measuredAt;
   state.updating = updating ? `Measuring again… ${data.scanned.toLocaleString()} of ${data.total.toLocaleString()} items checked.` : "";
   renderFreshness();
-  $("match").textContent = data.matchCount ? `${data.matchCount.toLocaleString()} item${data.matchCount === 1 ? "" : "s"} · ${size(data.matchBytes)}` : "";
+  if (isKept) {
+    $("match").textContent = data.matchCount
+      ? `${data.matchCount.toLocaleString()} kept item${data.matchCount === 1 ? "" : "s"} · sorted by most recently kept`
+      : "No kept items";
+  } else {
+    $("match").textContent = data.matchCount
+      ? `${data.matchCount.toLocaleString()} item${data.matchCount === 1 ? "" : "s"} · ${size(data.matchBytes)}`
+      : (state.hideReviewed || state.hideShrunk ? "All items reviewed or shrunk" : "");
+  }
   document.querySelector('#kinds [data-kind="raw"]').hidden = !data.rawCount && state.kind !== "raw";
 
   const select = $("year");
@@ -628,7 +882,24 @@ function ago(seconds) {
   return `${days} day${days === 1 ? "" : "s"} ago`;
 }
 function renderGrid() {
-  const key = state.items.map((item) => item.id + ":" + item.bytes).join("|");
+  if (state.items.length === 0) {
+    gridKey = "empty:" + state.kind;
+    if (state.kind === "kept") {
+      $("grid").replaceChildren(
+        el("div", { className: "empty-state", style: "grid-column: 1 / -1; text-align: center; padding: 60px 20px; color: var(--muted); background: var(--card); border: 1px solid var(--line); border-radius: 12px; margin-top: 10px;" }, [
+          el("div", { style: "font-size: 32px; margin-bottom: 8px;" }, ["✓"]),
+          el("h2", { style: "font-size: 18px; margin: 0 0 6px; color: var(--fg);" }, ["No kept items"]),
+          el("p", { style: "max-width: 440px; margin: 0 auto; line-height: 1.5; font-size: 13px;" }, [
+            "Items you mark with Keep will appear here, sorted by most recently kept, so you can review or remove them anytime."
+          ])
+        ])
+      );
+      $("more").hidden = true;
+      renderBar();
+      return;
+    }
+  }
+  const key = state.items.map((item) => item.id + ":" + item.bytes + ":" + (item.kept ? 1 : 0)).join("|");
   if (key !== gridKey) {
     gridKey = key;
     $("grid").replaceChildren(...state.items.map((item, index) => {
@@ -638,6 +909,8 @@ function renderGrid() {
       both.onclick = () => toggle("toBoth", item);
       const remove = el("button", { className: "pickdelete" });
       remove.onclick = () => toggle("toDelete", item);
+      const keep = el("button", { className: "pickkeep" });
+      keep.onclick = () => toggleKeep(item);
       const reveal = el("button", { className: "reveal", textContent: isFileItem(item) ? "Show in Finder" : "Open in Photos" });
       reveal.onclick = () => openInPhotos(item);
       const picture = el("img", { loading: "lazy", alt: "", src: "/thumb?size=480&id=" + encodeURIComponent(item.id) });
@@ -663,11 +936,15 @@ function renderGrid() {
           el("div", { className: "meta", textContent: details, title: details }),
           el("div", { className: "meta", textContent: item.name, title: item.name }),
           // Videos and RAW photos can be compressed; other photos just get Delete.
-          el("div", { className: "actions" }, compressible(item) ? [both, remove, shrink] : [remove]),
+          el("div", { className: "actions" }, compressible(item) ? [both, keep, remove, shrink] : [keep, remove]),
           reveal,
         ]),
       ]);
       card.dataset.id = item.id;
+      if (item.video) {
+        card.onmouseenter = () => prewarmVideo(item.id);
+        card.onfocus = () => prewarmVideo(item.id);
+      }
       return card;
     }));
   }
@@ -727,30 +1004,143 @@ function dropShrunkPicks() {
   }
 }
 
+function setMode(mode) {
+  state.mode = mode;
+  try { localStorage.setItem("mode", mode); } catch (error) {}
+  document.body.dataset.mode = mode;
+  for (const button of $("modes").children) {
+    button.setAttribute("aria-pressed", button.dataset.mode === mode);
+  }
+  const baction = $("baction");
+  if (baction) {
+    const shrinkOpt = baction.querySelector('option[value="toShrink"]');
+    const bothOpt = baction.querySelector('option[value="toBoth"]');
+    if (shrinkOpt) shrinkOpt.hidden = mode === "simple";
+    if (bothOpt) bothOpt.textContent = mode === "simple" ? "Shrink & free space" : "Compress & delete";
+    if (mode === "simple" && baction.value === "toShrink") baction.value = "toBoth";
+  }
+  renderTiles();
+  renderBar();
+  if (state.viewing) renderViewerBar();
+  renderGuide();
+}
+
+function applyPreset(name) {
+  state.preset = name;
+  try { localStorage.setItem("preset", name); } catch (error) {}
+  document.querySelectorAll("#spresets .preset-card").forEach((card) => {
+    const active = card.dataset.preset === name;
+    card.classList.toggle("active", active);
+    card.setAttribute("aria-checked", String(active));
+  });
+  if (name === "balanced") {
+    $("sres").value = "1080";
+    $("sfps").value = "30";
+    $("scodec").value = "hevc";
+    $("squality").value = "high";
+  } else if (name === "max") {
+    $("sres").value = "720";
+    $("sfps").value = "30";
+    $("scodec").value = "hevc";
+    $("squality").value = "medium";
+  } else if (name === "keep4k") {
+    $("sres").value = "keep";
+    $("sfps").value = "keep";
+    $("scodec").value = "hevc";
+    $("squality").value = "high";
+  }
+  renderEstimate();
+}
+
+function renderGuide() {
+  const steps = $("guidesteps");
+  if (!steps) return;
+  const isSimple = state.mode === "simple";
+  if (isSimple) {
+    steps.innerHTML = `
+      <div class="step">
+        <span class="icos">
+          <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"/></svg></span>
+          <span class="ico delete"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l.9 12a1.6 1.6 0 0 0 1.6 1.5h6a1.6 1.6 0 0 0 1.6-1.5l.9-12M10 11v6M14 11v6"/></svg></span>
+        </span>
+        <div><b>Shrink &amp; free space</b><p>Makes a smaller copy, then moves the original to Recently Deleted once the queue has finished.</p></div>
+      </div>
+      <div class="step">
+        <span class="ico" style="color:var(--good);background:color-mix(in srgb, var(--good) 13%, transparent);"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <div><b>Keep</b><p>Marks the item as reviewed and hides it from the list.</p></div>
+      </div>
+      <div class="step">
+        <span class="ico delete"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l.9 12a1.6 1.6 0 0 0 1.6 1.5h6a1.6 1.6 0 0 0 1.6-1.5l.9-12M10 11v6M14 11v6"/></svg></span>
+        <div><b>Delete</b><p>Removes the item without compressing it.</p></div>
+      </div>
+    `;
+  } else {
+    steps.innerHTML = `
+      <div class="step">
+        <span class="icos">
+          <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"/></svg></span>
+          <span class="ico delete"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l.9 12a1.6 1.6 0 0 0 1.6 1.5h6a1.6 1.6 0 0 0 1.6-1.5l.9-12M10 11v6M14 11v6"/></svg></span>
+        </span>
+        <div><b>Compress &amp; delete</b><p>Makes the smaller copy, then deletes the original once the whole queue has finished.</p></div>
+      </div>
+      <div class="step">
+        <span class="ico" style="color:var(--good);background:color-mix(in srgb, var(--good) 13%, transparent);"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <div><b>Keep</b><p>Marks the item as reviewed and hides it from the list.</p></div>
+      </div>
+      <div class="step">
+        <span class="ico delete"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l.9 12a1.6 1.6 0 0 0 1.6 1.5h6a1.6 1.6 0 0 0 1.6-1.5l.9-12M10 11v6M14 11v6"/></svg></span>
+        <div><b>Delete</b><p>Removes the item without compressing it.</p></div>
+      </div>
+      <div class="step">
+        <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"/></svg></span>
+        <div><b>Compress</b><p>Makes a much smaller copy. The original stays until you delete it.</p></div>
+      </div>
+    `;
+  }
+}
+
 // Brings every tile in line with the selections and the shrink queue, without rebuilding the tiles.
 function renderTiles() {
   const items = new Map(state.items.map((item) => [item.id, item]));
   for (const card of $("grid").children) {
     const id = card.dataset.id;
+    const item = items.get(id);
     const shrinking = state.toShrink.has(id), doingBoth = state.toBoth.has(id), deleting = state.toDelete.has(id);
-    const work = tileWork(state.work.get(id), items.get(id));
-    const shrunk = items.has(id) && shrunkAlready(items.get(id));
-    const chip = card.querySelector(".chip"), from = items.get(id)?.shrunkFrom;
-    chip.hidden = from == null;
-    chip.textContent = from ? `✓ Compressed from ${size(from)}` : "✓ Compressed copy";
+    const isKept = Boolean(item?.kept);
+    const work = tileWork(state.work.get(id), item);
+    const isCopy = item?.shrunkFrom != null;
+    const shrunk = (items.has(id) && shrunkAlready(item)) || isCopy;
+    const chip = card.querySelector(".chip"), from = item?.shrunkFrom;
+    chip.hidden = from == null && !isKept;
+    if (from != null) {
+      chip.textContent = from ? `✓ Compressed from ${size(from)}` : "✓ Compressed copy";
+    } else if (isKept) {
+      chip.textContent = "✓ Kept";
+    }
     card.classList.toggle("shrinking", shrinking);
     card.classList.toggle("both", doingBoth);
     card.classList.toggle("deleting", deleting);
+    card.classList.toggle("kept", isKept);
     card.classList.toggle("working", Boolean(work));
-    const shrink = card.querySelector(".pickshrink"), both = card.querySelector(".pickboth"), remove = card.querySelector(".pickdelete");
+    const shrink = card.querySelector(".pickshrink"), both = card.querySelector(".pickboth"), remove = card.querySelector(".pickdelete"), keep = card.querySelector(".pickkeep");
     if (shrink) {
       shrink.textContent = shrinking ? "✓ Compress" : "Compress";
       shrink.disabled = Boolean(work?.busy);
-      both.textContent = doingBoth ? "✓ Compress & delete" : "Compress & delete";
+      both.textContent = doingBoth 
+        ? (state.mode === "simple" ? "✓ Shrink & free space" : "✓ Compress & delete")
+        : (state.mode === "simple" ? "Shrink & free space" : "Compress & delete");
+      both.title = state.mode === "simple" ? "Compress video and move original to Recently Deleted to reclaim space" : "Compress, then delete the original";
       both.disabled = Boolean(work?.busy);
-      shrink.hidden = both.hidden = shrunk;
+      shrink.hidden = shrunk || state.mode === "simple";
+      both.hidden = shrunk;
     }
-    remove.textContent = (deleting ? "✓ " : "") + (shrunk ? "Delete original" : "Delete");
+    if (keep) {
+      keep.textContent = isKept ? "✓ Kept" : "Keep";
+      keep.title = isKept ? "Click to remove from kept" : "Keep without shrinking or deleting";
+      keep.disabled = Boolean(work?.busy);
+      keep.hidden = shrunk;
+    }
+    remove.textContent = (deleting ? "✓ " : "") + (shrunk ? (isCopy ? "Delete copy" : "Delete original") : "Delete");
     remove.disabled = Boolean(work?.busy);
     const panel = card.querySelector(".work");
     panel.hidden = !work;
@@ -769,8 +1159,13 @@ new ResizeObserver(() => {
 
 function actionLabel(picks, busy = false) {
   const shrinks = picks.toShrink.size + picks.toBoth.size, deletes = picks.toDelete.size;
-  return busy ? "Confirm in the Cloud Media Shrinker dialog…"
-    : shrinks && deletes ? `Compress ${shrinks} and delete ${deletes}…`
+  if (busy) return "Confirm in the Cloud Media Shrinker dialog…";
+  if (state.mode === "simple") {
+    return shrinks && deletes ? `Shrink ${shrinks} & delete ${deletes}…`
+      : shrinks ? `Shrink ${countOf([...picks.toShrink.values(), ...picks.toBoth.values()])} & free space…`
+      : `Delete ${deletes} item${deletes === 1 ? "" : "s"}…`;
+  }
+  return shrinks && deletes ? `Compress ${shrinks} and delete ${deletes}…`
     : shrinks ? `Compress ${countOf([...picks.toShrink.values(), ...picks.toBoth.values()])}…`
     : `Delete ${deletes} item${deletes === 1 ? "" : "s"}…`;
 }
@@ -781,7 +1176,9 @@ function renderBar() {
   $("shrinkcount").hidden = shrinks === 0;
   $("deletecount").hidden = deletes === 0;
   $("deletecount").classList.toggle("second", shrinks > 0);
-  $("shrinkcount").textContent = `${shrinks} to compress${both ? `, ${both} then delete` : ""} · ${size(total(state.toShrink) + total(state.toBoth))}`;
+  $("shrinkcount").textContent = state.mode === "simple"
+    ? `${shrinks} to shrink · ${size(total(state.toShrink) + total(state.toBoth))}`
+    : `${shrinks} to compress${both ? `, ${both} then delete` : ""} · ${size(total(state.toShrink) + total(state.toBoth))}`;
   $("deletecount").textContent = `${deletes} to delete · ${size(total(state.toDelete))}`;
   // One button for whatever has been picked. It is red only when deleting is all it will do.
   const act = $("act");
@@ -801,6 +1198,10 @@ function renderBar() {
 const PICKS = ["toShrink", "toBoth", "toDelete"];
 function toggle(which, item) {
   if (isBusy(item.id) || (which !== "toDelete" && shrunkAlready(item))) return;
+  if (item.kept) {
+    item.kept = false;
+    post("/api/keep", { ids: [item.id], kept: false });
+  }
   if (state[which].has(item.id)) state[which].delete(item.id);
   else if (which === "toDelete" || compressible(item)) {
     for (const pick of PICKS) state[pick].delete(item.id);
@@ -810,23 +1211,97 @@ function toggle(which, item) {
   if (state.viewing) renderViewerBar();
 }
 
+async function toggleKeep(item) {
+  if (!item || isBusy(item.id)) return;
+  const nextKept = !item.kept;
+  item.kept = nextKept;
+  if (nextKept) {
+    for (const pick of PICKS) state[pick].delete(item.id);
+    state.keptCount = (state.keptCount || 0) + 1;
+  } else {
+    state.keptCount = Math.max(0, (state.keptCount || 1) - 1);
+  }
+  updateKeptTabLabel();
+  const isKeptTab = state.kind === "kept";
+  if (!nextKept && isKeptTab) {
+    const curIdx = state.current;
+    state.items = state.items.filter((it) => it.id !== item.id);
+    state.match = Math.max(0, (state.match || 1) - 1);
+    toast("Removed from kept");
+    $("match").textContent = state.items.length
+      ? `${state.items.length.toLocaleString()} kept item${state.items.length === 1 ? "" : "s"} · sorted by most recently kept`
+      : "No kept items";
+    if (state.viewing && state.viewing.id === item.id) {
+      if (state.items.length === 0) {
+        closeViewer();
+        renderGrid();
+      } else {
+        const nextIdx = Math.min(curIdx, state.items.length - 1);
+        view(nextIdx);
+        renderGrid();
+      }
+    } else {
+      renderGrid();
+    }
+  } else {
+    renderTiles();
+    if (state.viewing) renderViewerBar();
+    renderBar();
+  }
+  const res = await post("/api/keep", { ids: [item.id], kept: nextKept });
+  if (!res.ok) {
+    if (!nextKept && isKeptTab) {
+      load();
+    } else {
+      item.kept = !nextKept;
+      if (nextKept) state.keptCount = Math.max(0, (state.keptCount || 1) - 1);
+      else state.keptCount = (state.keptCount || 0) + 1;
+      updateKeptTabLabel();
+      renderTiles();
+      if (state.viewing) renderViewerBar();
+      renderBar();
+    }
+    toast(res.error || "Couldn't save reviewed state.");
+  }
+}
+
 async function openInPhotos(item) {
   const result = await post("/api/reveal", { id: item.id });
   if (!result.ok) toast((isFileItem(item) ? "Couldn't show it in Finder: " : "Couldn't open it in Photos: ") + result.error);
+}
+
+let prewarmActive = false;
+const prewarmedVideos = new Set();
+function prewarmVideo(id) {
+  if (!id || id.startsWith("tour:") || prewarmedVideos.has(id) || prewarmActive) return;
+  prewarmedVideos.add(id);
+  if (prewarmedVideos.size > 200) {
+    const first = prewarmedVideos.values().next().value;
+    prewarmedVideos.delete(first);
+  }
+  prewarmActive = true;
+  fetch("/video?id=" + encodeURIComponent(id), { method: "HEAD" })
+    .catch(() => {})
+    .finally(() => { prewarmActive = false; });
 }
 
 // Viewer
 function view(index, item = state.items[index]) {
   state.current = index;
   state.viewing = item;
+  if (state.items[index + 1]?.video) prewarmVideo(state.items[index + 1].id);
+  if (state.items[index + 2]?.video) prewarmVideo(state.items[index + 2].id);
+  if (state.items[index - 1]?.video) prewarmVideo(state.items[index - 1].id);
   const stage = $("stage");
   const id = encodeURIComponent(item.id);
-  const poster = "/thumb?size=1600&id=" + id;
+  const poster = item.video ? "/thumb?size=480&id=" + id : "/thumb?size=1600&id=" + id;
   $("vreveal").textContent = isFileItem(item) ? "Show in Finder" : "Open in Photos";
   if (item.video && isFileItem(item)) {
     // A file plays from where it is; one only in Google Drive downloads as it plays.
     const note = el("p", { className: "loading", textContent: (item.tags || []).includes("in the cloud") ? "Downloading the video from Google Drive…" : "Loading the video…" });
-    const video = el("video", { controls: true, autoplay: true, poster, src: "/video?id=" + id });
+    const video = el("video", { controls: true, autoplay: true, preload: "auto", playsinline: true, poster, src: "/video?id=" + id });
+    video.setAttribute("playsinline", "");
+    video.setAttribute("webkit-playsinline", "");
     video.onloadeddata = () => note.remove();
     video.onerror = () => { note.textContent = "This video can't be played here. Use Show in Finder to open it."; video.removeAttribute("controls"); };
     stage.replaceChildren(el("div", { className: "player" }, [video, note]));
@@ -834,7 +1309,9 @@ function view(index, item = state.items[index]) {
     // Videos that live only in iCloud take a few seconds while Photos fetches a smaller copy.
     const busy = "Photos fetches one thing from iCloud at a time, and it's busy downloading an original to compress. Previews of iCloud-only videos have to wait until that's done.";
     const note = el("p", { className: "loading", textContent: state.downloading ? busy : "Getting the video from Photos… this can take a few seconds if it's only in iCloud." });
-    const video = el("video", { controls: true, autoplay: true, poster, src: "/video?id=" + id });
+    const video = el("video", { controls: true, autoplay: true, preload: "auto", playsinline: true, poster, src: "/video?id=" + id });
+    video.setAttribute("playsinline", "");
+    video.setAttribute("webkit-playsinline", "");
     video.onloadeddata = () => note.remove();
     video.onerror = () => { note.textContent = state.downloading ? busy : "This video couldn't be loaded here. Use Open in Photos to watch it."; video.removeAttribute("controls"); };
     stage.replaceChildren(el("div", { className: "player" }, [video, note]));
@@ -848,15 +1325,24 @@ function renderViewerBar() {
   const item = state.viewing;
   const place = state.current >= 0 ? ` · ${state.current + 1} of ${state.match.toLocaleString()}` : "";
   $("vsize").textContent = item.sizeKnown === false ? "Size unavailable" : size(item.bytes);
-  $("vmeta").textContent = ` · ${item.date || "No date"} · ${item.name}${item.video && item.dur > 0 ? " · " + duration(item.dur) : ""}${place}${item.copy ? ` · already compressed to ${size(item.copy.bytes)}, original not deleted` : ""}${item.shrunkFrom != null ? ` · a compressed copy${item.shrunkFrom ? ", was " + size(item.shrunkFrom) : ""}` : ""}`;
+  $("vmeta").textContent = ` · ${item.date || "No date"} · ${item.name}${item.video && item.dur > 0 ? " · " + duration(item.dur) : ""}${place}${item.copy ? ` · already compressed to ${size(item.copy.bytes)}, original not deleted` : ""}${item.shrunkFrom != null ? ` · a compressed copy${item.shrunkFrom ? ", was " + size(item.shrunkFrom) : ""}` : ""}${item.kept ? " · kept" : ""}`;
   const busy = isBusy(item.id);
   const shrunk = shrunkAlready(item);
-  $("vshrink").hidden = !compressible(item) || shrunk;
+  $("vkeep").hidden = shrunk;
+  $("vkeep").textContent = item.kept ? "✓ Kept" : "Keep";
+  $("vkeep").title = item.kept ? "Click to remove from kept" : "Keep without shrinking or deleting";
+  $("vkeep").className = item.kept ? "good" : "greenline";
+  $("vkeep").disabled = busy;
+  const isSimple = state.mode === "simple";
+  $("vshrink").hidden = isSimple || !compressible(item) || shrunk;
   $("vshrink").textContent = state.toShrink.has(item.id) ? "✓ Compress" : "Compress";
   $("vshrink").className = state.toShrink.has(item.id) ? "primary" : "";
   $("vshrink").disabled = busy;
   $("vboth").hidden = !compressible(item) || shrunk;
-  $("vboth").textContent = state.toBoth.has(item.id) ? "✓ Compress & delete" : "Compress & delete";
+  $("vboth").textContent = state.toBoth.has(item.id)
+    ? (isSimple ? "✓ Shrink & free space" : "✓ Compress & delete")
+    : (isSimple ? "Shrink & free space" : "Compress & delete");
+  $("vboth").title = isSimple ? "Compress video and move original to Recently Deleted to reclaim space" : "Compress, then delete the original";
   $("vboth").className = state.toBoth.has(item.id) ? "primary" : "mainline";
   $("vboth").disabled = busy;
   $("vdelete").textContent = (state.toDelete.has(item.id) ? "✓ " : "") + (shrunk ? "Delete original" : "Delete");
@@ -864,6 +1350,12 @@ function renderViewerBar() {
   $("vdelete").disabled = busy;
   $("vprev").disabled = state.current <= 0;
   $("vnext").disabled = state.current < 0 || state.current >= state.match - 1;
+  const keysEl = $("viewbar").querySelector(".keys");
+  if (keysEl) {
+    keysEl.textContent = isSimple
+      ? "← → to move · K to keep · B or S to shrink & free space · X to delete · Esc to close"
+      : "← → to move · K to keep · B to compress & delete · X to delete · C to compress · Esc to close";
+  }
 }
 function closeViewer() {
   state.current = -1;
@@ -879,6 +1371,11 @@ async function step(delta) {
 }
 
 // Events
+$("modes").onclick = (event) => {
+  const mode = event.target.dataset.mode;
+  if (!mode) return;
+  setMode(mode);
+};
 $("kinds").onclick = (event) => {
   const kind = event.target.dataset.kind;
   if (!kind) return;
@@ -887,6 +1384,16 @@ $("kinds").onclick = (event) => {
   load();
 };
 $("year").onchange = () => { state.year = $("year").value; load(); };
+$("rhide").onchange = () => {
+  state.hideReviewed = $("rhide").checked;
+  localStorage.setItem("hideReviewed", String(state.hideReviewed));
+  load();
+};
+$("shide").onchange = () => {
+  state.hideShrunk = $("shide").checked;
+  localStorage.setItem("hideShrunk", String(state.hideShrunk));
+  load();
+};
 $("more").onclick = () => load({ offset: state.items.length, append: true });
 $("clear").onclick = () => { for (const pick of PICKS) state[pick].clear(); renderGrid(); pollJobs(); };
 // Asks Photos to delete everything picked with Delete. macOS shows its own confirmation first.
@@ -936,6 +1443,7 @@ $("act").onclick = () => (state.toShrink.size + state.toBoth.size ? openShrink()
 $("vprev").onclick = () => step(-1);
 $("vnext").onclick = () => step(1);
 $("vclose").onclick = closeViewer;
+$("vkeep").onclick = () => toggleKeep(state.viewing);
 $("vshrink").onclick = () => toggle("toShrink", state.viewing);
 $("vboth").onclick = () => toggle("toBoth", state.viewing);
 $("vdelete").onclick = () => toggle("toDelete", state.viewing);
@@ -950,10 +1458,13 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeViewer();
   else if (event.key === "ArrowLeft") step(-1);
   else if (event.key === "ArrowRight") step(1);
+  else if (event.key.toLowerCase() === "k") toggleKeep(state.viewing);
   else if (event.key.toLowerCase() === "x") toggle("toDelete", state.viewing);
-  // C for Compress; S, from when the button said Shrink, still works.
-  else if (["c", "s"].includes(event.key.toLowerCase())) toggle("toShrink", state.viewing);
-  else if (event.key.toLowerCase() === "b") toggle("toBoth", state.viewing);
+  // In simple mode, B or S triggers Shrink & free space (toBoth). C is reserved for safe compress in advanced mode.
+  else if (event.key.toLowerCase() === "c") {
+    if (state.mode !== "simple") toggle("toShrink", state.viewing);
+  }
+  else if (["b", "s"].includes(event.key.toLowerCase())) toggle("toBoth", state.viewing);
 });
 
 // Shrinking
@@ -963,7 +1474,9 @@ function currentPicks() {
   const picks = { toShrink: new Map(), toBoth: new Map(), toDelete: new Map() };
   for (const [index, choice] of walkthrough.picks) {
     const item = TOUR_FILES[index];
-    picks[{ compress: "toShrink", both: "toBoth", delete: "toDelete" }[choice]].set(item.id, item);
+    if (choice === "compress") picks.toShrink.set(item.id, item);
+    else if (choice === "both") picks.toBoth.set(item.id, item);
+    else if (choice === "delete") picks.toDelete.set(item.id, item);
   }
   return picks;
 }
@@ -1038,7 +1551,7 @@ function renderEstimate() {
   $("sdetails").hidden = $("sedits").hidden = files;
   $("sroom").hidden = files && !drive;
   $("sboth").hidden = both === 0;
-  $("sboth").textContent = `The original${both === 1 ? "" : "s"} of the ${the([...picks.toBoth.values()])} picked with Compress & delete ${both === 1 ? "is" : "are"} ${gone} once the whole queue has finished.`;
+  $("sboth").textContent = `The original${both === 1 ? "" : "s"} of the ${the([...picks.toBoth.values()])} picked with ${state.mode === "simple" ? "Shrink & free space" : "Compress & delete"} ${both === 1 ? "is" : "are"} ${gone} once the whole queue has finished.`;
   $("sdeleterow").hidden = plain === 0;
   $("sdeletetext").textContent = both === 0 ? (files ? `Move each original to ${trash} once its smaller copy is saved` : "Delete each original once its smaller copy is in Photos")
     : `${files ? "Move" : "Delete"} the original${plain === 1 ? "" : "s"} of the other ${the([...picks.toShrink.values()])}${files ? ` to ${trash}` : ""} as well`;
@@ -1065,7 +1578,7 @@ function renderEstimate() {
       el("span", { textContent: !guess ? `${size(item.bytes)}, ${item.raw ? "has edits in Photos, so it's skipped" : item.live && !item.video ? "no motion to drop, so it's skipped" : "already this small"}` : `${size(item.bytes)} → ${guess.unknown ? "known once it's downloaded" : range(guess.low, guess.high)}${unsure ? " (may be skipped)" : ""}${item.shrunkFrom != null ? " · already a compressed copy" : ""}${doomed(item) ? " · original deleted" : ""}` }),
     ]);
   }));
-  $("stitle").textContent = `Compress ${countOf(picked)}`;
+  $("stitle").textContent = state.mode === "simple" ? `Shrink ${countOf(picked)}` : `Compress ${countOf(picked)}`;
   const made = deleting + keeping;
   let text = made ? `Copies: about ${range(copiesLow, copiesHigh)} for ${size(originals)} of originals.` : "";
   if (deleting && !keeping) text += ` Once the queue has finished and ${deleting === 1 ? "the original is" : "the originals are"} deleted, that frees about ${range(freedLow, freedHigh)}.`;
@@ -1098,12 +1611,18 @@ function openShrink() {
   $("stour").hidden = !walkthrough.active;
   // Deleting is chosen afresh for each batch: a tick left from an earlier one must not carry over.
   $("sdelete").checked = false;
+  if (state.mode === "simple") {
+    applyPreset(state.preset || "balanced");
+  }
   renderEstimate();
   $("shrink").classList.add("on");
   $("shrink").querySelector(".dialog").scrollTop = 0;
 }
 $("scancel").onclick = () => $("shrink").classList.remove("on");
 for (const id of ["sres", "sfps", "scodec", "squality", "sdelete"]) $(id).onchange = renderEstimate;
+document.querySelectorAll("#spresets .preset-card").forEach((card) => {
+  card.onclick = () => applyPreset(card.dataset.preset);
+});
 $("sstart").onclick = async () => {
   if (walkthrough.active) {
     $("shrink").classList.remove("on");
@@ -1122,12 +1641,19 @@ $("sstart").onclick = async () => {
     for (const item of picked) { state.toShrink.delete(item.id); state.toBoth.delete(item.id); }
     await pollJobs();
     renderGrid();
-    if (!$("jobs").hidden) {
-      $("jobs").scrollIntoView({ behavior: "smooth", block: "start" });
-    }
   }
   // Anything picked with Delete goes now. Originals of the items being compressed wait for the queue.
   await deletePicked();
+  const scrollToQueueOrTop = () => {
+    if (!$("jobs").hidden) {
+      $("jobs").scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+  scrollToQueueOrTop();
+  setTimeout(scrollToQueueOrTop, 150);
+  setTimeout(scrollToQueueOrTop, 400);
 };
 $("jclear").onclick = async () => { await post("/api/jobs/clear", {}); pollJobs(); };
 
@@ -1335,7 +1861,7 @@ async function bulkCandidates(minBytes) {
   const found = new Map();
   let room = null;
   for (let offset = 0; ; offset += BULK_PAGE) {
-    const params = new URLSearchParams({ offset, limit: BULK_PAGE, kind: state.kind, year: state.year, minBytes });
+    const params = new URLSearchParams({ offset, limit: BULK_PAGE, kind: state.kind, year: state.year, minBytes, hideReviewed: state.hideReviewed ? "1" : "0", hideShrunk: state.hideShrunk ? "1" : "0" });
     if (state.folder) { params.set("source", "folder"); params.set("folder", state.folder.path); }
     const data = await (await fetch("/api/items?" + params)).json();
     if (offset === 0) room = data.freeBytes ?? null;
@@ -1357,8 +1883,8 @@ async function renderBulk() {
   }
   // A newer choice in the dialog has started its own count.
   if (mine !== bulkCount) return;
-  // Compressed copies are left out of Compress: compressing a copy again only loses quality.
-  const eligible = items.filter((item) => !isBusy(item.id) && (action === "toDelete" || (compressible(item) && !shrunkAlready(item) && item.shrunkFrom == null)));
+  // Compressed copies and kept items are left out.
+  const eligible = items.filter((item) => !isBusy(item.id) && !item.kept && (action === "toDelete" || (compressible(item) && !shrunkAlready(item) && item.shrunkFrom == null)));
   const left = items.length - eligible.length;
   // Room to download: the free space, less the margin and whatever the queue has yet to download.
   const waiting = [...state.work.values()].filter((job) => job.state === "queued" || job.state === "downloading").reduce((sum, job) => sum + job.originalBytes, 0);
@@ -1577,17 +2103,20 @@ $("guidehide").onclick = () => showGuide(false);
 $("guideshow").onclick = () => showGuide(true);
 try { if (localStorage.getItem("guide") === "hidden") showGuide(false); } catch (error) {}
 // First-use practice stays separate from real items, picks and processing requests.
-const walkthrough = { active: false, step: 0, picks: new Map(), feedback: "", queue: [], queueTimers: [] };
-const WALKTHROUGH_KEY = "walkthrough-v1";
+const walkthrough = { active: false, step: 0, picks: new Map(), feedback: "", queue: [], queueTimers: [], simulatedDone: false };
+let tourPreviousSource = null;
+let tourPreviousFolder = null;
+const WALKTHROUGH_KEY = "walkthrough-v2";
 const TOUR_FILES = [
   { id: "tour:0", name: "Coast walk.mov", bytes: 8_420_000_000, thumb: "coast", video: true, w: 3840, h: 2160, dur: 704, tags: [] },
   { id: "tour:1", name: "Shoreline.mov", bytes: 5_160_000_000, thumb: "shore", video: true, w: 3840, h: 2160, dur: 425, tags: [] },
   { id: "tour:2", name: "Evening sky.mov", bytes: 2_780_000_000, thumb: "sky", video: true, w: 3840, h: 2160, dur: 260, tags: [] },
 ];
 const TOUR_STEPS = [
-  ["Your biggest files, first.", "A few large videos can use more space than thousands of photos. Start at the top. These are sample files, so you can practice without changing anything.", "Show me the actions"],
-  ["Three choices. You’re in control.", "Try a button on a sample file. Compress keeps the original. Compress & delete removes the original after the smaller copy is ready and the queue has finished.", "What happens next?"],
-  ["Review, then start.", "Your picks collect here. Change them or clear them before starting. Choose Compress to review the settings, then Start. This example won’t touch your files. macOS asks before items are deleted from Photos.", "Got it"],
+  ["Start with your largest files", "A few large 4K videos can take up more space than thousands of photos. Your library is sorted largest first so you can make the biggest impact immediately. These sample files let you practice safely.", "Next"],
+  ["Three clear choices. You’re in control.", "Choose what to do with each item. Try a button on the first sample video:\n- Shrink & free space: makes an efficient copy and removes the original.\n- Keep: hides files you're done with so you won't see them again when you come back.\n- Delete: removes the file directly without making a copy.", "Next"],
+  ["Pick many at once", "Have hundreds of large files? Instead of choosing items one by one, Pick many lets you select all files over a size threshold in one click. Try selecting sample files over 5 GB below:", "Next"],
+  ["Choose how small & review", "Your choices collect in the bottom bar. Select how you want to optimize your files, then run the simulation to see how it works:", "Choose where to start →"],
 ];
 function walkthroughBlocked() {
   return state.busy || state.queueLeft || state.viewing || PICKS.some((key) => state[key].size)
@@ -1597,34 +2126,47 @@ function startWalkthrough() {
   if (walkthroughBlocked()) {
     return toast("Finish your current picks or queue before opening the walkthrough.");
   }
+  tourPreviousSource = state.source;
+  tourPreviousFolder = state.folder;
   walkthrough.active = true;
   walkthrough.step = 0;
   walkthrough.picks.clear();
   resetTourQueue();
   walkthrough.feedback = "";
+  walkthrough.simulatedDone = false;
   clearTimeout(poll.timer);
   document.body.classList.add("walkthrough");
   $("walkthrough").hidden = false;
   renderWalkthrough(true);
   window.scrollTo(0, 0);
 }
-function finishWalkthrough(source = "local") {
+function finishWalkthrough(source) {
   resetTourQueue();
   $("shrink").classList.remove("on");
   $("tourdelete").classList.remove("on");
   walkthrough.active = false;
+  walkthrough.simulatedDone = false;
   document.body.classList.remove("walkthrough");
+  document.body.classList.remove("tour-final");
   $("walkthrough").hidden = true;
   try { localStorage.setItem(WALKTHROUGH_KEY, "done"); } catch (error) {}
   showGuide(false);
-  switchTo(source);
+  if (source) {
+    switchTo(source);
+  } else if (tourPreviousSource) {
+    switchTo(tourPreviousSource, tourPreviousFolder);
+  } else {
+    switchTo("photos");
+  }
   $("title").setAttribute("tabindex", "-1");
   $("title").focus({ preventScroll: true });
 }
 function renderWalkthrough(focusHeading = false) {
   const section = $("walkthrough");
-  if (walkthrough.step === 3) {
-    const title = el("h2", { className: "tour-title", id: "tour-title", textContent: "Ready for your own files?", tabIndex: -1 });
+  document.body.classList.toggle("tour-final", walkthrough.step === TOUR_STEPS.length);
+  section.className = "tour-step-" + walkthrough.step;
+  if (walkthrough.step === TOUR_STEPS.length) {
+    const title = el("h2", { className: "tour-title", id: "tour-title", textContent: "Ready to reclaim space?", tabIndex: -1 });
     const sources = el("div", { className: "tour-sources" }, [
       ["photos", "Choose Photos access when macOS asks. Read file sizes without downloading every original.", ICONS.photo],
       ["drive", "Choose a folder from Google Drive for desktop.", ICONS.cloud],
@@ -1634,11 +2176,8 @@ function renderWalkthrough(focusHeading = false) {
       button.onclick = () => finishWalkthrough(source);
       return button;
     }));
-    const later = el("button", { className: "link", textContent: "Set up later", type: "button" });
-    later.onclick = () => finishWalkthrough();
     section.replaceChildren(el("div", { className: "tour-panel" }, [title,
-      el("p", { textContent: "Processing happens on your Mac. Originals stay until you choose to remove them." }), sources,
-      el("div", { className: "tour-controls" }, [later])]));
+      el("p", { textContent: "Processing happens on your Mac. Originals stay until you choose to remove them." }), sources]));
     if (focusHeading) title.focus({ preventScroll: true });
     return;
   }
@@ -1646,71 +2185,159 @@ function renderWalkthrough(focusHeading = false) {
   const skip = el("button", { className: "link", textContent: "Skip tour", type: "button" });
   skip.onclick = () => finishWalkthrough();
   const back = el("button", { className: "link", textContent: "Back", type: "button", disabled: walkthrough.step === 0 });
-  back.onclick = () => { walkthrough.step--; renderWalkthrough(true); };
+  back.onclick = () => { walkthrough.step--; walkthrough.simulatedDone = false; renderWalkthrough(true); };
   const next = el("button", { className: "primary", textContent: nextLabel, type: "button" });
   next.onclick = () => {
-    if (walkthrough.step === 1 && walkthrough.picks.size === 0) walkthrough.picks.set(0, "compress");
-    walkthrough.step++; walkthrough.feedback = "";
+    if (walkthrough.step === 1) {
+      walkthrough.picks.clear();
+    } else if (walkthrough.step === 2 && walkthrough.picks.size === 0) {
+      walkthrough.picks.set(0, "both");
+      walkthrough.picks.set(1, "both");
+    }
+    walkthrough.step++;
+    walkthrough.feedback = "";
     renderWalkthrough(true);
   };
   const title = el("h2", { id: "tour-title", className: "tour-title", textContent: heading, tabIndex: -1 });
   const feedback = el("p", { className: "tour-feedback", textContent: walkthrough.feedback });
   feedback.setAttribute("aria-live", "polite");
-  const panel = el("div", { className: "tour-panel" }, [
-    el("div", { className: "tour-head" }, [el("span", { textContent: `Quick tour · ${walkthrough.step + 1} of 3` }), skip]),
-    title, el("p", { textContent: description }), el("div", { className: "tour-controls" }, [back, next]),
-  ]);
-  const grid = el("div", { className: "tour-grid" + (walkthrough.step === 0 ? " tour-highlight" : "") }, TOUR_FILES.map((file, index) => {
+  const descEl = el("div", { className: "tour-desc" });
+  for (const line of description.split("\n")) {
+    if (line.startsWith("- ")) {
+      const colonIdx = line.indexOf(":");
+      if (colonIdx !== -1) {
+        const name = line.slice(2, colonIdx);
+        const rest = line.slice(colonIdx);
+        descEl.appendChild(el("div", { className: "tour-point" }, [document.createTextNode("- "), el("b", { textContent: name }), document.createTextNode(rest)]));
+      } else {
+        descEl.appendChild(el("div", { className: "tour-point", textContent: line }));
+      }
+    } else if (line.trim()) {
+      descEl.appendChild(el("p", { textContent: line }));
+    }
+  }
+  const panelChildren = [
+    el("div", { className: "tour-head" }, [el("span", { textContent: `Quick tour · ${walkthrough.step + 1} of ${TOUR_STEPS.length}` }), skip]),
+    title, descEl, feedback
+  ];
+
+  if (walkthrough.step === 2) {
+    const currentVal = document.querySelector("#tour-bulk-size")?.value || "5000000000";
+    const sizeSelect = el("select", { id: "tour-bulk-size", className: "tour-select" }, [
+      el("option", { value: "5000000000", textContent: "5 GB (2 sample files · 13.6 GB)" }),
+      el("option", { value: "2000000000", textContent: "2 GB (3 sample files · 16.4 GB)" }),
+    ]);
+    sizeSelect.value = currentVal;
+    sizeSelect.onchange = () => renderWalkthrough();
+    const bulkBtn = el("button", { className: "primary", textContent: "Pick with Pick many", type: "button" });
+    bulkBtn.onclick = () => {
+      const minBytes = Number(sizeSelect.value);
+      const matching = TOUR_FILES.map((f, idx) => ({ ...f, idx })).filter(f => f.bytes >= minBytes);
+      walkthrough.picks.clear();
+      for (const f of matching) {
+        walkthrough.picks.set(f.idx, "both");
+      }
+      const totalBytes = matching.reduce((s, f) => s + f.bytes, 0);
+      const label = minBytes >= 5e9 ? "5 GB" : "2 GB";
+      walkthrough.feedback = `✓ Picked ${matching.length} sample files over ${label} (${size(totalBytes)} total) in one click! Notice how they are now selected below.`;
+      renderWalkthrough();
+    };
+    panelChildren.push(el("div", { className: "tour-pickmany-box tour-spotlight" }, [
+      el("div", { className: "tour-pickmany-row" }, [
+        el("span", { textContent: "Select files at least:" }),
+        sizeSelect,
+        bulkBtn
+      ])
+    ]));
+  }
+
+  panelChildren.push(el("div", { className: "tour-controls" }, [back, next]));
+  const panel = el("div", { className: "tour-panel" }, panelChildren);
+  const isSimple = state.mode === "simple";
+  const choiceDefs = isSimple
+    ? [["both", "Shrink & free space"], ["keep", "Keep"], ["delete", "Delete"]]
+    : [["both", "Compress & delete"], ["keep", "Keep"], ["delete", "Delete"], ["compress", "Compress"]];
+  const minBulkBytes = Number(document.querySelector("#tour-bulk-size")?.value) || 5e9;
+  const grid = el("div", {
+    className: "tour-grid" + (walkthrough.step === 0 ? " tour-spotlight" : walkthrough.step === 3 ? " tour-dimmed" : "")
+  }, TOUR_FILES.map((file, index) => {
     const pick = walkthrough.picks.get(index);
-    const actions = el("div", { className: "tour-actions" + (walkthrough.step === 1 && index === 0 ? " tour-highlight" : "") },
-      [["both", "Compress & delete"], ["delete", "Delete"], ["compress", "Compress"]].map(([choice, label]) => {
-        const button = el("button", { textContent: (pick === choice ? "✓ " : "") + label, type: "button" });
+    const isStep1Target = walkthrough.step === 1 && index === 0;
+    const isDimmed = (walkthrough.step === 1 && index > 0)
+      || (walkthrough.step === 2 && file.bytes < minBulkBytes);
+    const actions = el("div", {
+      className: "tour-actions" + (isStep1Target ? " tour-spotlight" : "")
+    },
+      choiceDefs.map(([choice, label]) => {
+        const picked = pick === choice;
+        const button = el("button", { textContent: (picked ? "✓ " : "") + label, type: "button" });
         button.dataset.choice = choice;
         button.dataset.tourPick = `${index}:${choice}`;
-        button.setAttribute("aria-pressed", String(pick === choice));
+        button.setAttribute("aria-pressed", String(picked));
         button.onclick = () => {
-          if (walkthrough.picks.get(index) === choice) walkthrough.picks.delete(index); else walkthrough.picks.set(index, choice);
-          walkthrough.feedback = choice === "compress" ? "Compress makes a smaller copy and keeps the original."
-            : choice === "both" ? "Compress & delete removes the original after the smaller copy is ready and you confirm deletion."
-            : "Delete removes this item without making a smaller copy.";
+          if (walkthrough.picks.get(index) === choice) walkthrough.picks.delete(index);
+          else walkthrough.picks.set(index, choice);
+          walkthrough.feedback = choice === "both"
+            ? (isSimple ? "Shrink & free space makes an efficient copy, then moves the original to Recently Deleted once the queue finishes." : "Compress & delete removes the original after the smaller copy is ready and you confirm deletion.")
+            : choice === "keep"
+            ? "Keep hides files you're done with so you won't see them again when you come back."
+            : choice === "delete"
+            ? "Delete removes this file directly without making a copy."
+            : "Compress makes a smaller copy and keeps the original.";
           renderWalkthrough();
-          section.querySelector(`[data-tour-pick="${index}:${choice}"]`).focus({ preventScroll: true });
+          const target = section.querySelector(`[data-tour-pick="${index}:${choice}"]`);
+          if (target) target.focus({ preventScroll: true });
         };
         return button;
       }));
-    return el("article", { className: "tour-card" + (pick ? " picked" : "") }, [
+    return el("article", {
+      className: "tour-card" + (pick ? " picked" : "") + (isDimmed ? " tour-dimmed" : "")
+    }, [
       el("div", { className: "tour-thumb" }, [el("img", { src: `/tour/${file.thumb}.jpg`, alt: ["Rocky coast beside a forest", "Quiet sandy shoreline", "Clouds in the evening sky"][index] }), el("span", { className: "play" }), el("span", { className: "sample", textContent: "4K · Sample video" })]),
       el("div", { className: "tour-info" }, [el("strong", { textContent: size(file.bytes) }), el("p", { textContent: file.name }), actions]),
     ]);
   }));
-  section.replaceChildren(panel, el("p", { className: "tour-subtitle", textContent: "Sample library · largest first · no personal files" }), grid);
-  if (walkthrough.step === 2) {
-    const picks = currentPicks(), shrinks = picks.toShrink.size + picks.toBoth.size, deletes = picks.toDelete.size;
+  section.replaceChildren(panel, grid);
+  if (walkthrough.step === 3) {
+    const picks = currentPicks();
+    const shrinks = picks.toShrink.size + picks.toBoth.size;
+    const deletes = picks.toDelete.size;
     const count = shrinks + deletes;
-    const run = el("button", { className: shrinks ? "primary" : "danger", textContent: actionLabel(picks), type: "button", disabled: count === 0 });
+    const run = el("button", { className: shrinks ? "primary" : "danger", textContent: count ? (shrinks ? "Review & simulate" : "Simulate delete") : "Pick an item above", type: "button", disabled: count === 0 });
     run.onclick = () => shrinks ? openShrink() : openTourDelete();
     const clear = el("button", { textContent: "Clear", type: "button", disabled: count === 0 });
     clear.onclick = () => { walkthrough.picks.clear(); walkthrough.feedback = ""; renderWalkthrough(); };
     const labels = [];
-    if (shrinks) labels.push(`${shrinks} to compress${picks.toBoth.size ? `, ${picks.toBoth.size} then delete` : ""} · ${size([...picks.toShrink.values(), ...picks.toBoth.values()].reduce((sum, item) => sum + item.bytes, 0))}`);
+    if (shrinks) labels.push(`${shrinks} to shrink · ${size([...picks.toShrink.values(), ...picks.toBoth.values()].reduce((sum, item) => sum + item.bytes, 0))}`);
     if (deletes) labels.push(`${deletes} to delete · ${size([...picks.toDelete.values()].reduce((sum, item) => sum + item.bytes, 0))}`);
-    if (count) section.append(el("div", { className: "tour-review tour-highlight" }, [
-      el("strong", { textContent: labels.join(" · ") || "No items picked" }), run, clear,
-    ]));
+    if (count) {
+      section.append(el("div", { className: "tour-review tour-spotlight" }, [
+        el("strong", { textContent: labels.join(" · ") || "No items picked" }), run, clear,
+      ]));
+    }
   }
   if (walkthrough.queue.length) {
-    section.append(el("section", { className: "tour-queue", ariaLabel: "Example processing queue" }, [
-      el("strong", { textContent: "Queue" }), el("p", { className: "tour-subtitle", textContent: "Sample files · no files are changed" }),
+    const queueChildren = [
+      el("strong", { textContent: "Queue" }),
+      el("p", { className: "tour-subtitle", textContent: "Sample files · no files are changed" }),
       ...walkthrough.queue.map((job) => el("div", { className: "job" }, [el("span", { className: "name", textContent: job.name }), el("span", { className: "status", textContent: job.status })])),
-    ]));
+    ];
+    if (walkthrough.simulatedDone) {
+      queueChildren.push(el("div", { className: "tour-complete-msg" }, [
+        el("strong", { textContent: "✓ Example complete" }),
+        el("p", { textContent: "A smaller copy was created, and the bloated original was safely moved to Recently Deleted (where it can be restored for 30 days). Your personal files are untouched." }),
+        el("button", { className: "primary", textContent: "Next", type: "button", onclick: () => { walkthrough.step = TOUR_STEPS.length; renderWalkthrough(true); } }),
+      ]));
+    }
+    section.append(el("section", { className: "tour-queue tour-spotlight", ariaLabel: "Example processing queue" }, queueChildren));
   }
-  section.append(feedback);
   if (focusHeading) title.focus({ preventScroll: true });
 }
 function resetTourQueue() {
   for (const timer of walkthrough.queueTimers) clearTimeout(timer);
   walkthrough.queueTimers = [];
   walkthrough.queue = [];
+  walkthrough.simulatedDone = false;
 }
 function openTourDelete() {
   const dialog = $("tourdelete");
@@ -1719,8 +2346,11 @@ function openTourDelete() {
 }
 function startTourQueue() {
   resetTourQueue();
+  walkthrough.simulatedDone = false;
   walkthrough.queue = [...walkthrough.picks].map(([index, choice]) => ({
-    name: TOUR_FILES[index].name, choice: choice === "compress" && $("sdelete").checked ? "both" : choice, status: choice === "delete" ? "Example: deletion confirmed" : "Waiting",
+    name: TOUR_FILES[index].name,
+    choice: choice === "compress" && $("sdelete").checked ? "both" : choice,
+    status: choice === "delete" ? "Example: deletion confirmed" : "Waiting",
   }));
   walkthrough.picks.clear();
   walkthrough.feedback = "";
@@ -1733,8 +2363,12 @@ function startTourQueue() {
       for (const job of walkthrough.queue) {
         job.status = job.choice === "delete" ? "Example: deleted"
           : phase === "encoding" ? "Example: encoding…"
-          : job.choice === "both" ? "Example: copy saved · original waits for confirmation"
-          : "Example: copy saved · original kept";
+          : job.choice === "both" ? "✓ Example complete · Smaller copy ready · Original moved to Recently Deleted (safe for 30 days)"
+          : job.choice === "keep" ? "✓ Example complete · Marked kept"
+          : "✓ Example complete · Smaller copy ready · Original kept";
+      }
+      if (phase === "done") {
+        walkthrough.simulatedDone = true;
       }
       renderWalkthrough();
     }, delay));
@@ -1747,6 +2381,8 @@ $("tourshow").onclick = startWalkthrough;
 // Keep "measured 5 minutes ago" honest while the page sits open.
 setInterval(renderFreshness, 60000);
 async function startPage() {
+  setMode(state.mode);
+  applyPreset(state.preset);
   // Reloading during an active queue must continue showing the real queue.
   await pollJobs();
   let seen = false;

@@ -1,5 +1,5 @@
 <p align="center"><img src="assets/icon.svg" width="120" alt=""></p>
-<h1 align="center">Photo Review</h1>
+<h1 align="center">Cloud Media Shrinker</h1>
 <p align="center">See what is filling your iCloud Photos or Google Drive storage, then compress the big videos and photos or delete what you don't need.</p>
 <p align="center"><a href="https://danielyaa5.github.io/photo-review/"><b>Website and download</b></a></p>
 
@@ -9,35 +9,47 @@
 real use macOS asks you to confirm before anything is deleted; that dialog isn't shown here.</sub>
 
 Photos on the Mac can't sort by file size, so a handful of huge videos can quietly use most of an iCloud plan.
-Photo Review lists everything in your library from largest to smallest, lets you preview each item, and gives
+Cloud Media Shrinker lists everything in your library from largest to smallest, lets you preview each item, and gives
 you two ways to get space back: delete it, or replace a video or RAW photo with a much smaller copy.
 
 It runs entirely on your Mac, in its own window, and nothing about your library is uploaded anywhere. The only thing
 it sends is a check with GitHub for a newer version, when it opens and once a day after that, which
-Photo Review > Check for Updates Automatically turns off.
+Cloud Media Shrinker > Check for Updates Automatically turns off.
 
 ## What it does
 
-- **A quick first-use tour.** Practice the three actions with sample files before connecting your own library.
-  Skip it anytime, or reopen Quick tour later. Photos access is requested when you choose Apple Photos.
+- **A quick first-use tour.** Practice the core actions with sample files before connecting your own library.
+  A 4-step walkthrough introduces previewing, choosing actions (**Shrink & free space**, **Keep**, **Delete**),
+  batch selection with **Pick many**, and choosing where to start. Skip it anytime, or reopen Quick tour from
+  the top bar. Photos access is requested when you choose Apple Photos.
+- **Simple and Advanced modes.**
+  - **Simple mode (default):** Focused, clean triage. Each card offers **Shrink & free space**, **Keep**, and
+    **Delete** (or **Delete copy** for compressed copies). Starting compression presents three 1-click presets:
+    **Balanced (Recommended)** (1080p, 30 fps, High, HEVC — saves ~70%), **Maximum Savings** (720p, 30 fps, Medium, HEVC — saves ~85%),
+    and **Preserve 4K** (Original resolution & fps, High, HEVC — saves ~45%).
+  - **Advanced mode:** Full control for power users. Gives separate **Compress** (keep original) and **Compress & delete**
+    buttons on tiles, with granular settings for resolution caps (4K, 1080p, 720p, or keep original), frame rate caps (30, 24 fps,
+    or keep original), codec (HEVC vs H.264), and quality levels.
+- **Smart filters.**
+  - **Hide kept** (checked by default): Hides items you've marked with **Keep** so you won't see them again when you come back.
+  - **Hide already shrunk** (checked by default): Hides items that already have a smaller copy so you can focus on unprocessed files.
+  - Filter by media type: All, Videos, Photos, RAW photos, or Kept items.
+  - Filter by year.
 - **Largest first.** Every photo and video with its real stored size, including edited versions and Live
-  Photo video. Filter by videos, photos or RAW photos, or by year.
-- **Preview before deciding.** Thumbnails for everything, and in-page playback for videos, including ones
+  Photo video.
+- **Preview before deciding.** Thumbnails for everything, and fast in-page playback for videos, including ones
   that are only in iCloud.
-- **Three separate picks.** Each video and each RAW, JPEG or Live Photo has Compress & delete, Delete and
-  Compress buttons, so you can line up some to compress and other things to delete, then start it all with one button. Compress & delete
-  compresses a video, then deletes the original once the whole queue has finished. A video in the queue shows
-  its progress on its tile, and one that has already been compressed says so and offers only Delete original.
-  The smaller copies themselves carry a "Compressed from 25.60 GB" label, so they aren't mistaken for videos
-  still to do.
-- **Compress videos.** Pick a resolution cap (4K, 1080p, 720p), a frame-rate cap, HEVC or H.264, and a quality
-  level. A size estimate updates as you choose. The smaller copy is added to Photos with the original's date,
-  location, favorite flag and albums.
+- **Clean actions on every item.**
+  - **Shrink & free space:** Compresses the video or photo, then deletes the original once the whole queue finishes.
+  - **Keep:** Marks files you are done with so you don't have to evaluate them again.
+  - **Delete:** Moves items directly to macOS Recently Deleted (or Trash for folders/Drive), safe for 30 days.
+  - Items that have already been compressed show **Delete copy** to easily discard the smaller copy if desired.
+  The smaller copies themselves carry a "Compressed from 25.60 GB" label so they aren't mistaken for originals.
 - **Pick many at once.** "Pick many…" picks everything in the current view that is at least a size you choose,
-  for example every video over 1 GB, for Compress, Compress & delete or Delete. Items already compressed, or
-  in the queue, are left out. One go picks up to 1,000, the largest first; pick again for the next ones. For
-  Compress it also stops at what your Mac has room to download, keeping 10 GB free, since each original is
-  downloaded before it's compressed. That is what limits big videos.
+  for example every video over 1 GB, for Shrink & free space, Compress, Compress & delete, or Delete. Items already compressed
+  or in the queue are left out. One go picks up to 1,000, the largest first; pick again for the next ones. For
+  compression it also stops at what your Mac has room to download, keeping 10 GB free, since each original is
+  downloaded before it's compressed.
 - **Compress RAW photos.** A RAW photo becomes a 10-bit HEIC copy with its camera details, date and location.
   It is developed afresh with macOS's standard RAW settings, so its colours can differ a little from what
   Photos shows, and it isn't HDR: compare before deleting. On test files from four cameras that came to 13-45%
@@ -50,34 +62,33 @@ Photo Review > Check for Updates Automatically turns off.
   measured SSIM 0.986-0.990 against the original). Re-compressing a JPEG loses a little quality, so this only
   happens to photos you pick.
 - **Titles, captions and keywords carry over** to the compressed copy, through Photos' own scripting. macOS asks
-  once whether Photo Review may control Photos, and Photo Review asks when you start a queue (opening Photos in
+  once whether Cloud Media Shrinker may control Photos, and asks when you start a queue (opening Photos in
   the background if it isn't open), so the question comes while you're there. If they can't be copied, the
   original isn't deleted. If the question goes unanswered, one copy waits for it and the rest of the queue
   carries on without. People tags can't be copied.
 - **HDR stays HDR.** iPhone HDR video is re-encoded as 10-bit HEVC with HDR intact. ProRes and other 10-bit
-  footage keeps its 10 bits too: it is saved as 10-bit HEVC even if you chose H.264, which would flatten it
+  footage keeps its 10 bits too: it is saved as 10-bit HEVC even if you chose H.264 in Advanced mode, which would flatten it
   to 8 bits. Slo-mo keeps its timing and sound.
 - **Delete with a safety net.** Nothing is removed until you approve the standard macOS confirmation, and
   deleted items go to Recently Deleted for 30 days. Originals due to go at the end of a queue are checked once
   more first: if the copy has gone, or the original was edited in the meantime, the original is kept.
-- **Copy to a folder, then delete.** For the items picked with Delete, copies the original files (plus any
+- **Copy to a folder, then delete.** For items picked with Delete, copies the original files (plus any
   edited version and a Live Photo's video) into a folder you choose, such as one on an external drive, with a
   folder for each year. Each copy is checked against the original's size, and the items are deleted only after
   that, with one confirmation once the queue is done. The files keep their own camera details, but titles,
   captions, keywords and albums live in Photos and aren't copied.
 - **Folders and Google Drive too.** Besides Apple Photos, the sidebar has Google Drive and Local Folder. Add a
   folder on your Mac or an external drive, or one from Google Drive for desktop (which shows your Drive in Finder),
-  and its photos and videos are listed largest first with the same three buttons. Copies are saved in a
+  and its photos and videos are listed largest first with the same action buttons. Copies are saved in a
   `Compressed` folder inside it, with the original's dates, and the originals stay where they are; deleting moves
-  files to the Trash after Photo Review asks (files in Google Drive go to Google Drive's trash instead, where they
-  can be restored for 30 days). Files that are only
-  in Google Drive are listed without being downloaded, and download when you open or compress them. There's no
-  Google sign-in: Drive is read through Google Drive for desktop. Taking a folder off the list leaves its files
-  alone.
+  files to the Trash after Cloud Media Shrinker asks (files in Google Drive go to Google Drive's trash instead, where they
+  can be restored for 30 days). Files that are only in Google Drive are listed without being downloaded, and download
+  when you open or compress them. There's no Google sign-in: Drive is read through Google Drive for desktop. Taking a
+  folder off the list leaves its files alone.
 - **Says when it's done.** A notification when the queue finishes, saying what was compressed and whether a
   deletion is waiting for you to confirm, and a Dock badge counting what is left.
 - **Tells you about new versions.** When a newer release is out, a note at the top of the window says so, and
-  Photo Review > Check for Updates… checks straight away.
+  Cloud Media Shrinker > Check for Updates… checks straight away.
 - **Savings page.** A running total of what you have freed, split into what compressing saved and what
   deleting saved, plus what is still waiting on you. One history table lists every compression and deletion,
   sorts by date, by size or by space saved, and can show only videos or only photos.
@@ -86,12 +97,12 @@ Photo Review > Check for Updates Automatically turns off.
 
 | The library, with a queue running | Choosing how far to compress |
 |---|---|
-| ![The library view, largest first](docs/screenshot-library.png) | ![The compress dialog with a per-video size estimate](docs/screenshot-shrink.png) |
+| ![The library view, largest first](docs/screenshot-library.png) | ![The compress dialog with presets and size estimates](docs/screenshot-shrink.png) |
 | **A Google Drive folder** | **Savings and history** |
 | ![A Google Drive folder, largest first, most files only in the cloud](docs/screenshot-drive.png) | ![The savings page](docs/screenshot-savings.png) |
 
 The library, compress and Google Drive screenshots use made-up data; the Savings one is the author's own history.
-The walkthrough thumbnails (Picsum IDs 13, 12 and 38), pictures in those three screenshots and in the demo are free placeholder photos from [Lorem Picsum](https://picsum.photos),
+The walkthrough thumbnails, pictures in those three screenshots and in the demo are free placeholder photos from [Lorem Picsum](https://picsum.photos),
 which draws on [Unsplash](https://unsplash.com/license).
 
 ## How compressing works
@@ -119,13 +130,13 @@ Savings are largest on ProRes and high-bitrate action-camera footage.
 
 1. [Download PhotoReview.zip](https://github.com/danielyaa5/photo-review/releases/latest/download/PhotoReview.zip)
    (the latest release).
-2. Unzip it and move **Photo Review** to your Applications folder.
+2. Unzip it and move **Cloud Media Shrinker** to your Applications folder.
 3. Open it.
 
 The app is signed and notarized by Apple, so it opens like any other downloaded app. It runs on Apple silicon
 and Intel Macs with macOS 13 or later, though it has only been tested on macOS 27.
 
-On first launch macOS asks whether Photo Review may access your Photos library; choose **Allow Full Access**,
+On first launch macOS asks whether Cloud Media Shrinker may access your Photos library; choose **Allow Full Access**,
 since it needs to read sizes, add compressed copies and delete what you select. Its window then shows your
 library. The first measurement of a large library takes a minute or more, with the biggest videos shown first;
 after that the app opens straight away for the rest of the day.
@@ -142,7 +153,7 @@ You need Apple's command line tools (`xcode-select --install`).
 git clone https://github.com/danielyaa5/photo-review.git
 cd photo-review
 ./build.sh
-open "Photo Review.app"
+open "Cloud Media Shrinker.app"
 ```
 
 A local build is signed for your Mac only and uses a different app identity from the release, so macOS asks
@@ -151,21 +162,21 @@ for Photos access separately for each.
 ## Managing the size of your Photos library
 
 **Your Mac's Photos library can grow while you compress videos.** Photos downloads full-quality originals
-from iCloud, and the smaller copies are added alongside them. Photo Review removes its own temporary
+from iCloud, and the smaller copies are added alongside them. Cloud Media Shrinker removes its own temporary
 conversion files, but Photos controls how long downloaded originals stay on disk. The Savings page tracks
 changes to the items in your library; it does not measure free disk space on your Mac.
 
 In **Photos → Settings → iCloud**, select **Optimize Mac Storage** if you use iCloud Photos. Photos can keep
 smaller local versions when space is limited, but this does not immediately clear recent downloads. Work in
-smaller batches if disk space is tight: downloads from a long queue can accumulate, and **Compress & delete**
+smaller batches if disk space is tight: downloads from a long queue can accumulate, and **Shrink & free space**
 or **Delete each original** asks for deletion only after the whole queue finishes.
 
 To reclaim space after a batch:
 
 1. Play each smaller copy in Photos and check its picture, sound and full length. Confirm it has uploaded
    to iCloud, and keep a separate backup of the original if you may want its full quality later.
-2. Delete the replaced originals using **Delete original** in Photo Review, or approve the batch's
-   deletion request if you used **Compress & delete** or **Delete each original**. They move to Recently Deleted.
+2. Delete the replaced originals using **Delete original** in Cloud Media Shrinker, or approve the batch's
+   deletion request if you used **Shrink & free space** or **Delete each original**. They move to Recently Deleted.
 3. To remove those originals sooner than the usual 30 days, open **Recently Deleted** in Photos on your
    Mac, or sign in to [iCloud Photos](https://www.icloud.com/photos) and open **Recently Deleted** there.
    Select only the originals you have checked and replaced, then choose **Delete** and confirm. Avoid
@@ -174,7 +185,7 @@ To reclaim space after a batch:
    substantially reduce the local library size, but the space may not return immediately.
 
 **Permanent deletion removes the originals from iCloud and every device using iCloud Photos, and ends
-the 30-day recovery option.** The smaller copies remain as separate items. Photo Review does not empty
+the 30-day recovery option.** The smaller copies remain as separate items. Cloud Media Shrinker does not empty
 Recently Deleted for you. If you keep an original in the main library, Photos still decides when to clear
 its local download.
 

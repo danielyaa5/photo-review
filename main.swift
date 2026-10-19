@@ -248,6 +248,9 @@ final class Library {
     #endif
     private static let cacheLifetime: TimeInterval = 24 * 60 * 60
 
+    private var videoURLCache: [String: (url: URL, date: Date)] = [:]
+    private let videoURLCacheLock = NSLock()
+
     private var authorizationRequested = false
 
     init() {
@@ -521,7 +524,7 @@ final class Library {
     }
 
     /// `minBytes` leaves out anything smaller, for picking many items at once.
-    func query(kind: String, year: Int?, minBytes: Int64 = 0, offset: Int, limit: Int) -> [String: Any] {
+    func query(kind: String, year: Int?, minBytes: Int64 = 0, excludedIds: Set<String> = [], excludeCopies: Bool = false, keptTimestamps: [String: Double] = [:], offset: Int, limit: Int) -> [String: Any] {
         lock.lock()
         let all = Array(items.values)
         var state: [String: Any] = ["status": status, "scanned": scanned, "total": total]
@@ -534,11 +537,11 @@ final class Library {
         #if APP_STORE
         state.merge(PhotosSizeAccess.shared.state) { $1 }
         #endif
-        return state.merging(Library.listing(all, kind: kind, year: year, minBytes: minBytes, offset: offset, limit: limit)) { $1 }
+        return state.merging(Library.listing(all, kind: kind, year: year, minBytes: minBytes, excludedIds: excludedIds, excludeCopies: excludeCopies, keptTimestamps: keptTimestamps, offset: offset, limit: limit)) { $1 }
     }
 
     /// One page of `all`, largest first, with the totals the page shows. Folders list their files the same way.
-    static func listing(_ all: [Item], kind: String, year: Int?, minBytes: Int64, offset: Int, limit: Int) -> [String: Any] {
+    static func listing(_ all: [Item], kind: String, year: Int?, minBytes: Int64, excludedIds: Set<String> = [], excludeCopies: Bool = false, keptTimestamps: [String: Double] = [:], offset: Int, limit: Int) -> [String: Any] {
         var years: [Int: (bytes: Int64, count: Int)] = [:]
         var libraryBytes: Int64 = 0
         var rawCount = 0
@@ -548,11 +551,32 @@ final class Library {
             years[item.year, default: (0, 0)].count += 1
             if item.isRaw { rawCount += 1 }
         }
-        // "photo" includes RAW photos; "raw" is only those.
+        let isKeptView = kind == "kept"
+        let keptInSource = all.filter { keptTimestamps[$0.id] != nil }.count
+        // "photo" includes RAW photos; "raw" is only those; "kept" is previously kept items.
         let matches = all.filter { item in
-            let kindMatches = kind == "all" || (kind == "raw" ? item.isRaw : (kind == "video") == item.isVideo)
-            return kindMatches && (year == nil || item.year == year) && item.bytes >= minBytes
-        }.sorted { $0.bytes != $1.bytes ? $0.bytes > $1.bytes : $0.id < $1.id }
+            let kindMatches: Bool
+            if isKeptView {
+                kindMatches = keptTimestamps[item.id] != nil
+            } else {
+                kindMatches = kind == "all" || (kind == "raw" ? item.isRaw : (kind == "video") == item.isVideo)
+            }
+            if !kindMatches || (year != nil && item.year != year) || item.bytes < minBytes { return false }
+            if !isKeptView && excludedIds.contains(item.id) { return false }
+            if !isKeptView && excludeCopies && [" (compressed)", " (shrunk)"].contains(where: { ((item.name as NSString).deletingPathExtension).hasSuffix($0) }) {
+                return false
+            }
+            return true
+        }.sorted { a, b in
+            if isKeptView {
+                let ta = keptTimestamps[a.id] ?? 0
+                let tb = keptTimestamps[b.id] ?? 0
+                if ta != tb { return ta > tb }
+                return a.bytes != b.bytes ? a.bytes > b.bytes : a.id < b.id
+            } else {
+                return a.bytes != b.bytes ? a.bytes > b.bytes : a.id < b.id
+            }
+        }
         let page = matches.dropFirst(max(0, offset)).prefix(max(0, limit))
 
         var result: [String: Any] = [:]
@@ -561,6 +585,7 @@ final class Library {
         result["unknownSizeCount"] = all.filter { !$0.sizeKnown }.count
         // The page only offers a RAW filter when there is something for it to show.
         result["rawCount"] = rawCount
+        result["keptCount"] = keptInSource
         result["matchCount"] = matches.count
         result["matchBytes"] = matches.reduce(Int64(0)) { $0 + $1.bytes }
         result["years"] = years.keys.sorted(by: >).map { ["year": $0, "bytes": years[$0]!.bytes, "count": years[$0]!.count] }
@@ -671,10 +696,38 @@ final class Library {
         giveUp(after: patience + 15)
     }
 
+    func cachedVideoURL(id: String) -> URL? {
+        videoURLCacheLock.lock()
+        defer { videoURLCacheLock.unlock() }
+        guard let entry = videoURLCache[id] else { return nil }
+        if FileManager.default.fileExists(atPath: entry.url.path) {
+            videoURLCache[id] = (entry.url, Date())
+            return entry.url
+        } else {
+            videoURLCache.removeValue(forKey: id)
+            return nil
+        }
+    }
+
+    func cacheVideoURL(id: String, url: URL) {
+        videoURLCacheLock.lock()
+        defer { videoURLCacheLock.unlock() }
+        videoURLCache[id] = (url, Date())
+        if videoURLCache.count > 500 {
+            let sorted = videoURLCache.sorted { $0.value.date < $1.value.date }
+            for entry in sorted.prefix(100) {
+                videoURLCache.removeValue(forKey: entry.key)
+            }
+        }
+    }
+
     /// A playable file for the video. Uses the copy on this Mac when there is one; otherwise asks Photos to
     /// fetch a reduced-size version from iCloud. Photos fetches one thing at a time, so this can stall behind
     /// a large download; after `patience` seconds it gives up with nil.
-    func videoURL(id: String, patience: Double = 45, completion: @escaping (URL?) -> Void) {
+    func videoURL(id: String, allowNetwork: Bool = true, patience: Double = 45, completion: @escaping (URL?) -> Void) {
+        if let cached = cachedVideoURL(id: id) {
+            return completion(cached)
+        }
         guard let asset = asset(id), asset.mediaType == .video else { return completion(nil) }
         let once = NSLock()
         var finished = false
@@ -683,13 +736,17 @@ final class Library {
             let already = finished
             finished = true
             once.unlock()
-            if !already { completion(url) }
+            if !already {
+                if let url = url { self.cacheVideoURL(id: id, url: url) }
+                completion(url)
+            }
         }
         let local = PHVideoRequestOptions()
         local.isNetworkAccessAllowed = false
         local.deliveryMode = .automatic
         PHImageManager.default().requestAVAsset(forVideo: asset, options: local) { video, _, _ in
             if let url = (video as? AVURLAsset)?.url { return finish(url) }
+            guard allowNetwork else { return finish(nil) }
             let remote = PHVideoRequestOptions()
             remote.isNetworkAccessAllowed = true
             remote.deliveryMode = .mediumQualityFormat
@@ -1056,7 +1113,7 @@ final class Folders {
     }
 
     /// The items of one added folder, a page at a time, like the Photos library's.
-    func query(folder path: String, kind: String, year: Int?, minBytes: Int64, offset: Int, limit: Int) -> [String: Any] {
+    func query(folder path: String, kind: String, year: Int?, minBytes: Int64, excludedIds: Set<String> = [], excludeCopies: Bool = false, keptTimestamps: [String: Double] = [:], offset: Int, limit: Int) -> [String: Any] {
         let path = Folders.normal(path)
         // Only folders on the list are looked into.
         lock.lock()
@@ -1064,7 +1121,7 @@ final class Folders {
         lock.unlock()
         guard listed else {
             let none: [String: Any] = ["status": "missing", "scanned": 0, "total": 0, "measuredAt": NSNull()]
-            return none.merging(Library.listing([], kind: kind, year: year, minBytes: minBytes, offset: offset, limit: limit)) { $1 }
+            return none.merging(Library.listing([], kind: kind, year: year, minBytes: minBytes, excludedIds: excludedIds, excludeCopies: excludeCopies, keptTimestamps: keptTimestamps, offset: offset, limit: limit)) { $1 }
         }
         let scan = scanIfNeeded(path)
         lock.lock()
@@ -1072,7 +1129,7 @@ final class Folders {
         var result: [String: Any] = ["status": scan.status, "scanned": scan.scanned, "total": scan.total]
         result["measuredAt"] = scan.measuredAt.map { $0.timeIntervalSince1970 as Any } ?? NSNull()
         lock.unlock()
-        return result.merging(Library.listing(all, kind: kind, year: year, minBytes: minBytes, offset: offset, limit: limit)) { $1 }
+        return result.merging(Library.listing(all, kind: kind, year: year, minBytes: minBytes, excludedIds: excludedIds, excludeCopies: excludeCopies, keptTimestamps: keptTimestamps, offset: offset, limit: limit)) { $1 }
     }
 
     /// Adds a file the app has just written, such as a smaller copy, to its folder's list, or refreshes one that has
@@ -1192,7 +1249,11 @@ final class History {
         lock.lock()
         defer { lock.unlock() }
         var event = event
-        event["time"] = clock.string(from: Date())
+        let now = Date()
+        event["time"] = clock.string(from: now)
+        if event["timestamp"] == nil {
+            event["timestamp"] = now.timeIntervalSince1970
+        }
         events.append(event)
         guard var line = try? JSONSerialization.data(withJSONObject: event) else { return }
         line.append(Data("\n".utf8))
@@ -1235,6 +1296,38 @@ final class History {
             }
         }
         return origins
+    }
+
+    /// Ids and timestamps of items marked as kept/reviewed (assetId -> latest keep timestamp).
+    func keptTimestamps() -> [String: Double] {
+        lock.lock()
+        defer { lock.unlock() }
+        var kept: [String: Double] = [:]
+        for event in events where event["type"] as? String == "keep" {
+            guard let id = event["assetId"] as? String else { continue }
+            let isKept = (event["kept"] as? Bool) ?? true
+            if isKept {
+                let ts = (event["timestamp"] as? NSNumber)?.doubleValue
+                    ?? (event["time"] as? String).flatMap { clock.date(from: $0)?.timeIntervalSince1970 }
+                    ?? 0
+                kept[id] = ts
+            } else {
+                kept.removeValue(forKey: id)
+            }
+        }
+        return kept
+    }
+
+    /// Ids of items marked as kept/reviewed.
+    func kept() -> Set<String> {
+        Set(keptTimestamps().keys)
+    }
+
+    func recordKeep(ids: [String], kept: Bool) {
+        let now = Date().timeIntervalSince1970
+        for id in ids {
+            record(["type": "keep", "assetId": id, "kept": kept, "timestamp": now])
+        }
     }
 }
 
@@ -2840,8 +2933,16 @@ final class Server {
     private let history = History()
     private let queue = DispatchQueue(label: "http", attributes: .concurrent)
     private var listener: NWListener?
-    private let page: String
-    private let statsPage: String
+    private var page: String {
+        let url = Bundle.main.url(forResource: "index", withExtension: "html")
+        let content = url.flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? "index.html is missing"
+        return content.replacingOccurrences(of: "__TOKEN__", with: token)
+    }
+    private var statsPage: String {
+        let url = Bundle.main.url(forResource: "stats", withExtension: "html")
+        let content = url.flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? "stats.html is missing"
+        return content.replacingOccurrences(of: "__TOKEN__", with: token)
+    }
     private let icon: Data
     /// Called on the main thread with nil once the port is open, or with the reason it couldn't be.
     var onStart: ((String?) -> Void)?
@@ -2853,12 +2954,6 @@ final class Server {
     init(library: Library) {
         self.library = library
         converter = Converter(library: library, folders: folders, history: history)
-        func resource(_ name: String) -> String {
-            let url = Bundle.main.url(forResource: name, withExtension: "html")
-            return url.flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? "\(name).html is missing"
-        }
-        page = resource("index").replacingOccurrences(of: "__TOKEN__", with: token)
-        statsPage = resource("stats").replacingOccurrences(of: "__TOKEN__", with: token)
         icon = Bundle.main.url(forResource: "icon", withExtension: "svg").flatMap { try? Data(contentsOf: $0) } ?? Data()
     }
 
@@ -2964,14 +3059,30 @@ final class Server {
         case ("GET", "/api/items"):
             // The Photos library, or with source=folder one added folder.
             let folder = request.query["source"] == "folder" ? request.query["folder"] : nil
+            let kind = request.query["kind"] ?? "all"
+            let hideReviewed = (request.query["hideReviewed"] ?? "true") == "true" || request.query["hideReviewed"] == "1"
+            let hideShrunk = (request.query["hideShrunk"] ?? "true") == "true" || request.query["hideShrunk"] == "1"
+            let copies = history.copies(), origins = history.origins()
+            let keptTimestamps = history.keptTimestamps()
+            let isKeptView = kind == "kept"
+            var excluded: Set<String> = []
+            if !isKeptView {
+                if hideReviewed {
+                    excluded.formUnion(keptTimestamps.keys)
+                }
+                if hideShrunk {
+                    excluded.formUnion(copies.keys)
+                    excluded.formUnion(origins.keys)
+                }
+            }
             let query = { () -> [String: Any] in
-                let kind = request.query["kind"] ?? "all", year = Int(request.query["year"] ?? "")
+                let year = Int(request.query["year"] ?? "")
                 let minBytes = Int64(request.query["minBytes"] ?? "") ?? 0
                 let offset = Int(request.query["offset"] ?? "") ?? 0, limit = min(Int(request.query["limit"] ?? "") ?? 60, 2000)
                 if let folder = folder {
-                    return self.folders.query(folder: folder, kind: kind, year: year, minBytes: minBytes, offset: offset, limit: limit)
+                    return self.folders.query(folder: folder, kind: kind, year: year, minBytes: minBytes, excludedIds: excluded, excludeCopies: hideShrunk && !isKeptView, keptTimestamps: keptTimestamps, offset: offset, limit: limit)
                 }
-                return self.library.query(kind: kind, year: year, minBytes: minBytes, offset: offset, limit: limit)
+                return self.library.query(kind: kind, year: year, minBytes: minBytes, excludedIds: excluded, excludeCopies: hideShrunk && !isKeptView, keptTimestamps: keptTimestamps, offset: offset, limit: limit)
             }
             var result = query()
             // Anything on this page that has since been deleted, in Photos itself or in Finder, is dropped before it is shown.
@@ -2987,11 +3098,14 @@ final class Server {
             // along. This comes from the history file, so its tile can say so after the app is restarted.
             // A smaller copy says what it was shrunk from, so it isn't mistaken for something still to do.
             // The history knows the original's size; a copy made elsewhere is recognised by its name alone.
-            let copies = history.copies(), origins = history.origins()
             if let items = result["items"] as? [[String: Any]] {
                 result["items"] = items.map { item -> [String: Any] in
                     var item = item
                     let id = item["id"] as? String ?? ""
+                    if let ts = keptTimestamps[id] {
+                        item["kept"] = true
+                        item["keptAt"] = ts
+                    }
                     if let copy = copies[id].flatMap({ library.item($0) ?? folders.item($0) }) { item["copy"] = copy.json }
                     if let bytes = origins[id] {
                         item["shrunkFrom"] = bytes
@@ -3028,8 +3142,15 @@ final class Server {
                     self.send(connection, 404, "text/plain", Data("no image".utf8))
                 }
             }
-        case ("GET", "/video"):
+        case ("GET", "/video"), ("HEAD", "/video"):
             serveVideo(request, connection)
+        case ("POST", "/api/keep"):
+            let payload = (try? JSONSerialization.jsonObject(with: request.body)) as? [String: Any]
+            let ids = payload?["ids"] as? [String] ?? []
+            let kept = payload?["kept"] as? Bool ?? true
+            guard !ids.isEmpty else { return sendJSON(connection, ["ok": false, "error": "Nothing selected."], status: 400) }
+            history.recordKeep(ids: ids, kept: kept)
+            sendJSON(connection, ["ok": true])
         case ("POST", "/api/delete"):
             let payload = (try? JSONSerialization.jsonObject(with: request.body)) as? [String: Any]
             let ids = payload?["ids"] as? [String] ?? []
@@ -3189,8 +3310,10 @@ final class Server {
             return send(connection, 404, "text/plain", Data("not a video".utf8))
         }
         // A file in a folder plays from where it is (one only in Google Drive downloads as it plays).
+        let isHead = request.method == "HEAD"
         let find: (@escaping (URL?) -> Void) -> Void = Folders.isFile(id)
-            ? { found in found(Folders.url(id)) } : { found in self.library.videoURL(id: id, completion: found) }
+            ? { found in found(Folders.url(id)) }
+            : { found in self.library.videoURL(id: id, allowNetwork: !isHead, patience: isHead ? 2 : 45, completion: found) }
         find { url in
             guard let url = url else {
                 return self.send(connection, 504, "text/plain", Data("Photos didn't provide the video".utf8))
@@ -3219,10 +3342,16 @@ final class Server {
                 try? file.close()
                 return self.send(connection, 416, "text/plain", Data(), ["Content-Range": "bytes */\(size)"])
             }
-            var head = "HTTP/1.1 \(status) \(status == 200 ? "OK" : "Partial Content")\r\nContent-Type: video/mp4\r\n"
+            let ext = url.pathExtension.lowercased()
+            let mimeType = ext == "mov" ? "video/quicktime" : (ext == "m4v" ? "video/x-m4v" : "video/mp4")
+            var head = "HTTP/1.1 \(status) \(status == 200 ? "OK" : "Partial Content")\r\nContent-Type: \(mimeType)\r\n"
             head += "Content-Length: \(end - start + 1)\r\nAccept-Ranges: bytes\r\nConnection: close\r\n"
             if status == 206 { head += "Content-Range: bytes \(start)-\(end)/\(size)\r\n" }
             head += "\r\n"
+            if request.method == "HEAD" {
+                try? file.close()
+                return connection.send(content: Data(head.utf8), completion: .contentProcessed { _ in connection.cancel() })
+            }
             try? file.seek(toOffset: UInt64(start))
             connection.send(content: Data(head.utf8), completion: .contentProcessed { error in
                 if error == nil {

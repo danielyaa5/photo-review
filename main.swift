@@ -721,6 +721,22 @@ final class Library {
         }
     }
 
+    private func extractURL(from asset: AVAsset?) -> URL? {
+        if let urlAsset = asset as? AVURLAsset {
+            return urlAsset.url
+        }
+        if let comp = asset as? AVComposition {
+            for track in comp.tracks(withMediaType: .video) {
+                for segment in track.segments {
+                    if let compSegment = segment as? AVCompositionTrackSegment, let url = compSegment.sourceURL {
+                        return url
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
     /// A playable file for the video. Uses the copy on this Mac when there is one; otherwise asks Photos to
     /// fetch a reduced-size version from iCloud. Photos fetches one thing at a time, so this can stall behind
     /// a large download; after `patience` seconds it gives up with nil.
@@ -745,21 +761,35 @@ final class Library {
         local.isNetworkAccessAllowed = false
         local.deliveryMode = .automatic
         PHImageManager.default().requestAVAsset(forVideo: asset, options: local) { video, _, _ in
-            if let url = (video as? AVURLAsset)?.url { return finish(url) }
+            if let url = self.extractURL(from: video) { return finish(url) }
             guard allowNetwork else { return finish(nil) }
             let remote = PHVideoRequestOptions()
             remote.isNetworkAccessAllowed = true
             remote.deliveryMode = .mediumQualityFormat
+            var requestID: PHImageRequestID?
             let request = PHImageManager.default().requestAVAsset(forVideo: asset, options: remote) { video, _, info in
-                if video == nil { log("video \(id): \(String(describing: info))") }
-                finish((video as? AVURLAsset)?.url)
+                if let error = info?[PHImageErrorKey] as? Error {
+                    log("video \(id): \(error.localizedDescription)")
+                    return finish(nil)
+                }
+                if let cancelled = info?[PHImageCancelledKey] as? Bool, cancelled {
+                    return finish(nil)
+                }
+                guard let video = video else {
+                    // Photos can invoke this block multiple times (e.g. progress updates or initial status).
+                    return
+                }
+                finish(self.extractURL(from: video))
             }
+            requestID = request
             DispatchQueue.global().asyncAfter(deadline: .now() + patience) {
                 once.lock()
                 let pending = !finished
                 once.unlock()
-                if pending { PHImageManager.default().cancelImageRequest(request) }
-                finish(nil)
+                if pending {
+                    if let req = requestID { PHImageManager.default().cancelImageRequest(req) }
+                    finish(nil)
+                }
             }
         }
     }
@@ -2998,9 +3028,13 @@ final class Server {
     }
 
     private func send(_ connection: NWConnection, _ status: Int, _ type: String, _ body: Data, _ extra: [String: String] = [:]) {
+        var extraHeaders = extra
+        if status >= 400 && extraHeaders["Cache-Control"] == nil {
+            extraHeaders["Cache-Control"] = "no-store"
+        }
         var head = "HTTP/1.1 \(status) \(status == 200 ? "OK" : "Status")\r\nContent-Type: \(type)\r\n"
         head += "Content-Length: \(body.count)\r\nConnection: close\r\n"
-        for (name, value) in extra { head += "\(name): \(value)\r\n" }
+        for (name, value) in extraHeaders { head += "\(name): \(value)\r\n" }
         head += "\r\n"
         connection.send(content: Data(head.utf8) + body, completion: .contentProcessed { _ in connection.cancel() })
     }
@@ -3313,7 +3347,7 @@ final class Server {
         let isHead = request.method == "HEAD"
         let find: (@escaping (URL?) -> Void) -> Void = Folders.isFile(id)
             ? { found in found(Folders.url(id)) }
-            : { found in self.library.videoURL(id: id, allowNetwork: !isHead, patience: isHead ? 2 : 45, completion: found) }
+            : { found in self.library.videoURL(id: id, allowNetwork: true, patience: isHead ? 15 : 45, completion: found) }
         find { url in
             guard let url = url else {
                 return self.send(connection, 504, "text/plain", Data("Photos didn't provide the video".utf8))
@@ -3342,8 +3376,7 @@ final class Server {
                 try? file.close()
                 return self.send(connection, 416, "text/plain", Data(), ["Content-Range": "bytes */\(size)"])
             }
-            let ext = url.pathExtension.lowercased()
-            let mimeType = ext == "mov" ? "video/quicktime" : (ext == "m4v" ? "video/x-m4v" : "video/mp4")
+            let mimeType = "video/mp4"
             var head = "HTTP/1.1 \(status) \(status == 200 ? "OK" : "Partial Content")\r\nContent-Type: \(mimeType)\r\n"
             head += "Content-Length: \(end - start + 1)\r\nAccept-Ranges: bytes\r\nConnection: close\r\n"
             if status == 206 { head += "Content-Range: bytes \(start)-\(end)/\(size)\r\n" }

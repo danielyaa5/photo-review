@@ -300,6 +300,9 @@
   #stage .player { display: flex; flex-direction: column; align-items: center; max-width: 100%; height: 100%; justify-content: center; }
   #stage .player video { min-height: 0; }
   #stage .loading { color: #fff; margin: 10px 0 0; text-align: center; }
+  #stage .player-error { color: #eee; margin: 14px 0 0; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 440px; line-height: 1.4; font-size: 13px; }
+  #stage .player-retry-btn { background: var(--hover); border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 6px 14px; font-size: 12px; cursor: pointer; transition: background .15s; }
+  #stage .player-retry-btn:hover { background: var(--line); }
   #viewbar { background: var(--card); border-top: 1px solid var(--line); padding: 12px 20px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
   #viewbar .title { flex: 1; min-width: 200px; }
   #viewbar .title b { font-size: 16px; }
@@ -941,10 +944,6 @@ function renderGrid() {
         ]),
       ]);
       card.dataset.id = item.id;
-      if (item.video) {
-        card.onmouseenter = () => prewarmVideo(item.id);
-        card.onfocus = () => prewarmVideo(item.id);
-      }
       return card;
     }));
   }
@@ -1290,8 +1289,6 @@ function view(index, item = state.items[index]) {
   state.current = index;
   state.viewing = item;
   if (state.items[index + 1]?.video) prewarmVideo(state.items[index + 1].id);
-  if (state.items[index + 2]?.video) prewarmVideo(state.items[index + 2].id);
-  if (state.items[index - 1]?.video) prewarmVideo(state.items[index - 1].id);
   const stage = $("stage");
   const id = encodeURIComponent(item.id);
   const poster = item.video ? "/thumb?size=480&id=" + id : "/thumb?size=1600&id=" + id;
@@ -1303,7 +1300,11 @@ function view(index, item = state.items[index]) {
     video.setAttribute("playsinline", "");
     video.setAttribute("webkit-playsinline", "");
     video.onloadeddata = () => note.remove();
-    video.onerror = () => { note.textContent = "This video can't be played here. Use Show in Finder to open it."; video.removeAttribute("controls"); };
+    video.onerror = () => {
+      note.className = "player-error";
+      note.textContent = "This video can't be played here. Use Show in Finder to open it.";
+      video.removeAttribute("controls");
+    };
     stage.replaceChildren(el("div", { className: "player" }, [video, note]));
   } else if (item.video) {
     // Videos that live only in iCloud take a few seconds while Photos fetches a smaller copy.
@@ -1313,7 +1314,23 @@ function view(index, item = state.items[index]) {
     video.setAttribute("playsinline", "");
     video.setAttribute("webkit-playsinline", "");
     video.onloadeddata = () => note.remove();
-    video.onerror = () => { note.textContent = state.downloading ? busy : "This video couldn't be loaded here. Use Open in Photos to watch it."; video.removeAttribute("controls"); };
+    video.onerror = () => {
+      note.className = "player-error";
+      const msg = state.downloading ? busy : "This video couldn't be loaded here. Use Open in Photos to watch it.";
+      const retryBtn = el("button", {
+        className: "player-retry-btn",
+        textContent: "Retry",
+        onclick: () => {
+          note.className = "loading";
+          note.textContent = "Getting the video from Photos… this can take a few seconds if it's only in iCloud.";
+          video.src = "/video?id=" + id + "&retry=" + Date.now();
+          video.load();
+          video.play().catch(() => {});
+        }
+      });
+      note.replaceChildren(el("span", { textContent: msg }), retryBtn);
+      video.removeAttribute("controls");
+    };
     stage.replaceChildren(el("div", { className: "player" }, [video, note]));
   } else {
     stage.replaceChildren(el("img", { src: poster, alt: item.name }));

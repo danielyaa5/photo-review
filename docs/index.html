@@ -1,0 +1,59 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cloud Media Shrinker — Sort by size. Compress. Delete.</title><meta name="description" content="Sort your photos and videos by size to find what’s taking up the most space. Compress the files you want to keep, or delete the ones you no longer need."><link rel="icon" href="icon.svg"><link rel="canonical" href="https://danielyaa5.github.io/photo-review/"><style>
+  :root {
+    --bg: #f5f5f2; --card: #ffffff; --fg: #1b1b1d; --muted: #5f5f66; --line: #e1e1dc;
+    --accent: #0a62d0; --accent-ink: #ffffff; --soft: #e9f1fc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151517; --card: #212124; --fg: #f1f1f2; --muted: #a3a3aa; --line: #34343a;
+      --accent: #4c97f7; --accent-ink: #0b1220; --soft: #1b2a40;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  a { color: var(--accent); }
+  img { max-width: 100%; height: auto; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 22px; }
+  section { padding: 44px 0; }
+  h1 { font-size: clamp(30px, 5.2vw, 50px); line-height: 1.1; letter-spacing: -.02em; margin: 18px 0 14px; }
+  h2 { font-size: clamp(24px, 3.4vw, 32px); line-height: 1.2; letter-spacing: -.01em; margin: 0 0 18px; }
+  h3 { font-size: 19px; margin: 0 0 6px; }
+  p { margin: 0 0 12px; }
+  .muted { color: var(--muted); }
+
+  .hero { text-align: center; padding: 56px 0 28px; }
+  .hero img.icon { width: 104px; height: 104px; }
+  .hero .lede { font-size: clamp(18px, 2.2vw, 21px); color: var(--muted); max-width: 660px; margin: 0 auto 26px; }
+  .download { display: inline-block; background: var(--accent); color: var(--accent-ink); text-decoration: none; font-weight: 650; font-size: 20px; padding: 15px 30px; border-radius: 14px; }
+  .download:hover { filter: brightness(1.08); }
+  .download:focus-visible { outline: 3px solid var(--fg); outline-offset: 3px; }
+  .fine { color: var(--muted); font-size: 15px; margin-top: 14px; }
+
+  .demo { padding-top: 12px; }
+  .demo img { display: block; width: 100%; border-radius: 14px; border: 1px solid var(--line); background: var(--card); }
+  .demo p { text-align: center; font-size: 15px; margin-top: 10px; }
+
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+  @media (min-width: 640px) { .grid.two { grid-template-columns: 1fr 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; }
+  .card p:last-child { margin-bottom: 0; }
+  .step { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; background: var(--soft); color: var(--accent); font-weight: 700; margin-bottom: 10px; }
+  .example { background: var(--soft); border-radius: 14px; padding: 18px 22px; margin-top: 18px; }
+  .example b { font-size: 20px; }
+
+  ul.plain { list-style: none; margin: 0; padding: 0; }
+  ul.plain li { padding: 12px 0 12px 34px; border-top: 1px solid var(--line); position: relative; }
+  ul.plain li:first-child { border-top: 0; }
+  ul.plain li::before { content: "✓"; position: absolute; left: 4px; color: var(--accent); font-weight: 700; }
+  ul.notes li::before { content: "•"; }
+
+  details { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin-bottom: 10px; }
+  summary { cursor: pointer; font-weight: 600; }
+  details p { margin: 10px 0 0; color: var(--muted); }
+
+  .again { text-align: center; }
+  footer { border-top: 1px solid var(--line); padding: 26px 0 40px; color: var(--muted); font-size: 15px; text-align: center; }
+
+.feature img{display:block;width:100%;border-radius:14px;border:1px solid var(--line);margin-top:20px}.feature p{max-width:800px}.demo video{display:block;width:100%;border-radius:14px;border:1px solid var(--line)}.nav{display:flex;gap:22px;justify-content:center;flex-wrap:wrap;margin:24px 0 0}.notes li{margin:12px 0}.copyright{margin-top:18px} @media(max-width:500px){section{padding:28px 0}.hero{padding-top:32px}.download{font-size:17px;padding:14px 20px}}.demo video{height:auto}.hero.wrap{padding-left:22px;padding-right:22px}</style></head><body><header class="hero wrap"><img class="icon" src="icon.svg" alt=""><p class="fine">Cloud Media Shrinker</p><h1>Sort by size.<br>Compress. Delete.</h1><p class="lede">Sort your photos and videos by size to find what’s taking up the most space. Compress the files you want to keep, or delete the ones you no longer need.</p><p>Works with Apple Photos, Google Drive for desktop, and local folders.</p><a class="download" href="https://apps.apple.com/app/cloud-media-shrinker/id6824383256">Download on the Mac App Store</a><p class="fine">macOS 13 or later. See the App Store listing for current pricing.</p><nav class="nav"><a href="#demo">See it in action</a><a href="#features">Features</a><a href="#support">Support</a></nav></header><main>
+<section class="demo wrap" id="demo"><h2>See it in action</h2><video controls playsinline preload="metadata" poster="screenshot-library.png" width="1360" height="960"><source src="demo.mp4" type="video/mp4"></video><p><a href="demo.mp4">Watch the demo video</a></p><p class="muted">Screenshots and demo use fictional sample media and sizes. They show the latest interface, which may differ from the current App Store release.</p></section><section class="wrap feature" id="features"><h2>Find your biggest files first</h2><p>Browse Apple Photos from largest to smallest, with file sizes, capture dates, and previews on each tile. Filter by media type or year, and hide items you have kept or already compressed.</p><img src="screenshot-library.png" alt="The library, sorted largest first" loading="lazy" width="1360" height="960"></section><section class="wrap feature"><h2>Choose how much to compress</h2><p>Use Balanced, Maximum Savings, or Preserve 4K presets in Simple mode. Advanced mode gives you control over resolution, frame rate, format, and quality. Compress supported videos, RAW and JPEG photos, or make a still-only copy of a Live Photo.</p><img src="screenshot-shrink.png" alt="Compression presets and estimated output sizes" loading="lazy" width="1360" height="960"></section><section class="wrap feature"><h2>Select a batch in one step</h2><p>Auto Select finds items above a size you choose in the current view. Review the selection before starting. Compression batches account for the room your Mac needs to download originals.</p><img src="screenshot-auto-select.png" alt="Auto Select with a minimum file size" loading="lazy" width="1360" height="960"></section><section class="wrap feature"><h2>Preview before deciding</h2><p>Play videos and seek through the timeline before choosing what to keep. For media stored only in iCloud, the preview can take a few minutes to arrive; the app shows download progress when Photos provides it.</p><img src="screenshot-preview.png" alt="Video preview with playback controls" loading="lazy" width="1360" height="960"></section><section class="wrap feature"><h2>Apple Photos, Google Drive, and local folders</h2><p>Review your Photos library, a folder on your Mac or an external drive, or a folder from Google Drive for desktop. Folder compression saves smaller copies in a Compressed folder. You do not sign in to Google inside Cloud Media Shrinker.</p><img src="screenshot-drive.png" alt="A Google Drive folder with the current interface" loading="lazy" width="1360" height="960"></section><section class="wrap"><h2>Good to know</h2><div class="card"><ul class="notes"><li>Compression runs on your Mac. The app does not upload your library to the developer.</li><li>Compression is lossy, and savings vary. Check a smaller copy before deleting its original.</li><li>Apple Photos deletions go to Recently Deleted; folder deletions go to the relevant Trash. Cloud storage may not be reclaimed until originals leave Recently Deleted or the service’s trash.</li><li>iCloud originals must download before compression. Leave space on your Mac for them.</li><li>Savings and history keeps a local record of compression and deletion operations.</li></ul></div></section><section class="wrap"><h2>Get started</h2><ol><li>Download Cloud Media Shrinker from the Mac App Store.</li><li>Try the quick tour with sample files.</li><li>Choose Apple Photos, Google Drive, or Local Folder and grant the requested access.</li><li>Review your largest items and choose what to compress, keep, or delete.</li></ol></section><section class="wrap again"><a class="download" href="https://apps.apple.com/app/cloud-media-shrinker/id6824383256">Download on the Mac App Store</a></section></main><footer id="support"><div class="wrap"><h2>Support</h2><p><a href="https://github.com/danielyaa5/photo-review/issues">Report a bug or request a feature</a>.</p><p><a href="privacy.html">Privacy policy</a></p><p class="copyright">This repository contains product information and demo media. The application source code is maintained privately.</p></div></footer><script data-goatcounter="https://photo-review.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script></body></html>
